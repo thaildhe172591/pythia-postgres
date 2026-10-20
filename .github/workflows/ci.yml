@@ -90,3 +90,9 @@ jobs:
           pythia-pg install && pythia-pg doctor &&
           test -f .claude/skills/pythia-pg-apply/reference/refusals.md &&
           test -f .agents/skills/using-pythia-pg/SKILL.md
+      # the MCP approver answers from the installed console script
+      - run: >-
+          cd /tmp/scratch-project &&
+          printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}'
+          '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | pythia-pg mcp
+          | grep -q pythia_pg_approve

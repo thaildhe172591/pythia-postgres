@@ -6,10 +6,10 @@ what [pythia](https://github.com/thaildhe172591/pythia) does on Oracle: the
 agent learns from the live catalog, asks a person before any write, and
 writes only through a gate that snapshots, verifies and reports honestly.
 
-**Pre-alpha (Phase 3a).** It reads everything pythia's Learn movement
+**Pre-alpha (Phase 3b).** It reads everything pythia's Learn movement
 needs, and it writes through one gate. Every write is rehearsed inside a
-transaction, shown, approved by the developer at their console, and
-committed only as approved. `pythia-pg install` wires a project for an
+transaction, shown, approved by the developer — in the agent's chat or at
+their console — and committed only as approved. `pythia-pg install` wires a project for an
 agent: a guard that denies `psql` writing around the gate, the rules in
 every session, and the `pythia-pg-*` skills. The road and how each pythia idea maps onto
 PostgreSQL are in pythia-core's
@@ -19,7 +19,7 @@ What each gate stops, and what it does not, is in its
 
 | Works today | Next |
 |---|---|
-| `check`, `ls`, `src`, `cols`, `ddl`, `grep`, `deps`, `impact`, `errors`; `apply`, `approve`, `policy`, `journal`, `history`; `install`, `doctor`, `skill lint`, the hooks | approval from chat (3b); scripts (deploy), lint rules, autopilot leases (3c) |
+| `check`, `ls`, `src`, `cols`, `ddl`, `grep`, `deps`, `impact`, `errors`; `apply`, `approve` (console, chat, MCP), `policy`, `journal`, `history`; `install`, `doctor`, `skill lint`, the hooks, `mcp` | scripts (deploy), lint rules, autopilot leases (3c) |
 
 ## Install (from git while pre-alpha)
 
@@ -45,9 +45,14 @@ pythia-pg doctor      # is everything wired? exit 1 names what is not
   template — the developer fills in the passwords; an agent never opens it;
 - `.gitignore` lines for that file, this machine's approvals
   (`.pythia/postgres/grants/`) and `.claude/settings.local.json`;
-- `.claude/settings.local.json`: the hooks, spelled with this interpreter's
-  absolute path so they start whether or not a virtual environment is
-  active, and deny rules for the engine's files;
+- `.claude/settings.local.json`: the hooks (the guard, the session brief,
+  the AskUserQuestion answer), spelled with this interpreter's absolute path
+  so they start whether or not a virtual environment is active, and deny
+  rules for the engine's files;
+- the MCP approver `pythia_pg` (tool `pythia_pg_approve`), in this
+  machine's files only: Claude Code's local scope for the project
+  (`~/.claude.json`) and Codex's `~/.codex/config.toml`, each when that
+  client has run here;
 - a `pythia-pg` block in CLAUDE.md and AGENTS.md (pythia for Oracle's block,
   and the developer's own text, are left alone);
 - the skills, in `.claude/skills` and `.agents/skills`: `using-pythia-pg`
@@ -153,11 +158,26 @@ to fetch the rest.
 
 ```bash
 pythia-pg apply change.sql                   # preview: rehearsed, rolled back, nothing written
-pythia-pg approve 3fa9c1                     # the developer, in their own terminal
+pythia-pg approve 3fa9c1                     # the developer approves (or from chat, below)
 pythia-pg apply change.sql --confirm 3fa9c1  # writes it — only as approved
 pythia-pg journal restore <entry>            # undo is a write too: preview, approve, confirm
 pythia-pg policy                             # which groups may be written, and is rollback real?
 ```
+
+The developer approves through the first door that works:
+
+1. **In Claude Code's chat.** The agent asks with AskUserQuestion, its text
+   exactly the output of `pythia-pg approve --card <token>`, options
+   Approve / Reject. The answer hook records the approval only when the
+   question carried that card and the developer chose Approve themselves —
+   not an answer the agent wrote, not a dialog that closed unattended.
+2. **Through the MCP approver** (`pythia_pg_approve`; Codex starts here):
+   the client shows the card, and only an explicit Approve counts.
+3. **At the developer's console:** `pythia-pg approve <token>`.
+
+`pythia-pg doctor` warns about settings that would answer the chat door for
+the developer (`dontAsk` mode, an allow rule for AskUserQuestion, a hook
+matching every tool).
 
 One statement per file. `apply` sorts it into a group, and the policy
 decides: `source` (functions, procedures, views) and `comments` need the

@@ -35,12 +35,22 @@ NO WRITE WITHOUT A PREVIEW THE DEVELOPER SAW AND APPROVED
      `NOT VERIFIED` with the reason;
    - the rows a DML statement touched, with a sample;
    - warnings: another overload with the same name, `! DESTRUCTIVE`;
-   - a token, and the approval line.
+   - a token, and the approval doors.
 4. **Relay the preview verbatim** — diff, rehearsal, rows, warnings. Do not
    summarise away a broken dependent or a NOT VERIFIED line.
-5. **Ask.** The developer approves in their own terminal:
-   `pythia-pg approve <token>`. You cannot run it, and must never mint a
-   grant or set `PYTHIA_PG_CI` — the guard denies both. Wait for their yes.
+5. **Ask, through the first door that works** — the next one unasked when
+   a door fails (the hook or the tool result says which):
+   1. **AskUserQuestion** (Claude Code): run
+      `pythia-pg approve --card <token>` and ask with exactly its output,
+      options Approve / Reject, never with answers filled in. The answer
+      hook records the approval.
+   2. **The `pythia_pg_approve` tool** (MCP; Codex starts here), with the
+      token. The developer answers its prompt.
+   3. **The developer's terminal:** relay `pythia-pg approve <token>`.
+
+   Never mint a grant, pipe anything into `approve --hook`, or set
+   `PYTHIA_PG_CI` — the guard denies all three. A Reject means stop and ask
+   what should change.
 6. **Confirm:** `pythia-pg apply change.sql --confirm <token>`. It rehearses
    again and commits only if the file, the object, the rows and the
    verification still match what was approved; otherwise it rolls back and

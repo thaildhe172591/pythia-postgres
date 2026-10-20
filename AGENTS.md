@@ -5,7 +5,7 @@ it reads everything pythia's Learn movement needs, and writes through one
 gate. `pythia-pg install` wires a project: the guard, the session brief and
 the `pythia-pg-*` skills (`using-pythia-pg` routes).
 
-## Using pythia-pg as an agent (Phase 3a)
+## Using pythia-pg as an agent (Phase 3b)
 
 1. **Ask the database, never the dump.** `ls`, `src`, `cols`, `ddl`, `grep`
    against the live schema; `check` says where unqualified names really
@@ -24,9 +24,13 @@ the `pythia-pg-*` skills (`using-pythia-pg` routes).
    running: say so, and ask the developer to run `pythia-pg doctor`.
 4. **The developer sees every preview.** Relay `apply`'s preview verbatim:
    the diff, the rehearsal (what broke, or NOT VERIFIED), the rows, the
-   overload and destructive warnings. Then ask the developer to run
-   `pythia-pg approve <token>` in their own terminal — you cannot run it.
-   Pass `--confirm <token>` only after they say they approved. `--yes` and
+   overload and destructive warnings. Then ask through the first door that
+   works, moving to the next unasked when one fails: on Claude Code an
+   `AskUserQuestion` whose text is the output of `pythia-pg approve --card
+   <token>` verbatim (options Approve / Reject); then the
+   `pythia_pg_approve` tool (MCP — where Codex starts); then the
+   developer's terminal, `pythia-pg approve <token>`. Pass
+   `--confirm <token>` only after the approval arrives. `--yes` and
    loosening `policy` are the developer's actions, at a console.
 5. **Scope is what was asked.** Dependents that break are reported with a
    proposal, never fixed on your own initiative.

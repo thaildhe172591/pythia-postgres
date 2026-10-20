@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.5.0.dev0 — unreleased
+
+Phase 3b of the plan in pythia-core's DESIGN.md: approval from chat, on
+pythia-core 0.5.0.dev0.
+
+- **Three approval doors, in order:** AskUserQuestion with the card from
+  `pythia-pg approve --card <token>` (Claude Code, answered through the
+  `approve --hook` PostToolUse hook); the `pythia_pg_approve` MCP tool
+  (`pythia-pg mcp`; Codex starts here); `pythia-pg approve <token>` at the
+  developer's console.
+- **`pythia-pg install`** registers the MCP approver in this machine's files
+  only (`~/.claude.json` for this project, `~/.codex/config.toml`) and wires
+  the answer hook. **`pythia-pg doctor`** checks both doors.
+- **`pythia-pg-apply`** and AGENTS.md rule 4 walk the doors in order.
+
 ## 0.4.0.dev0 — unreleased
 
 Phase 3a of the plan in pythia-core's DESIGN.md: the harness, on pythia-core

@@ -881,6 +881,34 @@ def test_the_skill_pack_holds_the_contract_and_routes_every_skill():
         assert named in SKILL_NAMES, f"the router names a skill that is not shipped: {named}"
     text = "\n".join((s / "SKILL.md").read_text(encoding="utf-8") for s in pack)
     assert "pythia-pg approve <token>" in text and "--confirm <token>" in text
+    apply_skill = (PostgresEngine().skills_dir() / "pythia-pg-apply" / "SKILL.md") \
+        .read_text(encoding="utf-8")
+    doors = [apply_skill.index(d) for d in (
+        "AskUserQuestion", "pythia_pg_approve", "pythia-pg approve <token>")]
+    assert doors == sorted(doors), "the apply skill names the doors out of order"
+    assert "pythia-pg approve --card <token>" in apply_skill
+
+
+def test_the_mcp_approver_answers_as_a_real_process():
+    import subprocess
+    core_src = pathlib.Path(sys.modules["pythia_core"].__file__).resolve().parent.parent
+    env = {**os.environ, "PYTHONPATH": os.pathsep.join([str(ROOT / "src"), str(core_src)])}
+    session = "".join(json.dumps(m) + "\n" for m in (
+        {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
+        {"jsonrpc": "2.0", "method": "notifications/initialized"},
+        {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
+        {"jsonrpc": "2.0", "id": 3, "method": "tools/call",
+         "params": {"name": "pythia_pg_approve", "arguments": {"token": "abc123"}}}))
+    with tempfile.TemporaryDirectory() as td:
+        r = subprocess.run([sys.executable, "-m", "pythia_postgres", "mcp"],
+                           input=session, capture_output=True, text=True, cwd=td,
+                           env=env, timeout=60)
+    assert r.returncode == 0, r.stderr
+    out = [json.loads(line) for line in r.stdout.splitlines()]
+    assert out[0]["result"]["serverInfo"]["name"] == "pythia_pg"
+    assert [t["name"] for t in out[1]["result"]["tools"]] == ["pythia_pg_approve"]
+    assert out[2]["result"]["isError"]                    # no such preview: nothing minted
+    assert "no pending preview" in out[2]["result"]["content"][0]["text"].lower()
 
 
 def test_the_skills_ship_in_the_wheel():
