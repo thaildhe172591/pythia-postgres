@@ -6,14 +6,18 @@ what [pythia](https://github.com/thaildhe172591/pythia) does on Oracle: the
 agent learns from the live catalog, asks a person before any write, and
 writes only through a gate that snapshots, verifies and reports honestly.
 
-**Pre-alpha (Phase 1).** It reads: an agent can do pythia's whole Learn
-movement against a live PostgreSQL. It writes nothing yet. The road and how
-each pythia idea maps onto PostgreSQL are in pythia-core's
+**Pre-alpha (Phase 2).** It reads everything pythia's Learn movement needs,
+and it writes through one gate. Every write is rehearsed inside a
+transaction, shown, approved by the developer at their console, and
+committed only as approved. The road and how each pythia idea maps onto
+PostgreSQL are in pythia-core's
 [DESIGN.md](https://github.com/thaildhe172591/pythia-core/blob/main/DESIGN.md).
+What each gate stops, and what it does not, is in its
+[SECURITY.md](https://github.com/thaildhe172591/pythia-core/blob/main/SECURITY.md).
 
-| Works today | Next (Phase 2) |
+| Works today | Next (Phase 3) |
 |---|---|
-| `check`, `ls`, `src`, `cols`, `ddl`, `grep`, `deps`, `impact`, `errors`, `connections`, `version` | `apply` with a verified preview: run, verify, roll back, then ask |
+| `check`, `ls`, `src`, `cols`, `ddl`, `grep`, `deps`, `impact`, `errors`; `apply`, `approve`, `policy`, `journal`, `history` | approval from chat, a `psql` guard, skills, scripts (deploy), autopilot leases |
 
 ## Install (from git while pre-alpha)
 
@@ -103,16 +107,63 @@ to fetch the rest.
   table, run the DDL, rebuild it, compare. `pg_dump --schema-only` stays the
   reference for anything it does not cover yet, and the output says which.
 
+### Writing: the gate
+
+```bash
+pythia-pg apply change.sql                   # preview: rehearsed, rolled back, nothing written
+pythia-pg approve 3fa9c1                     # the developer, in their own terminal
+pythia-pg apply change.sql --confirm 3fa9c1  # writes it — only as approved
+pythia-pg journal restore <entry>            # undo is a write too: preview, approve, confirm
+pythia-pg policy                             # which groups may be written, and is rollback real?
+```
+
+One statement per file. `apply` sorts it into a group, and the policy
+decides: `source` (functions, procedures, views) and `comments` need the
+developer's approval; `data_dml`, `structural` and `grants` are denied
+until the developer runs `pythia-pg policy set <group> confirm` at a
+console. `session` (`SET`) is allowed.
+
+What the preview shows, and why it can be trusted:
+
+- **A rehearsal, not a prediction.** The statement ran inside a transaction
+  and was rolled back. The diff compares the definition before and after,
+  both as PostgreSQL prints them, so formatting is no noise. With
+  `plpgsql_check` installed, it says what the change broke compared with
+  just before; an `ALTER TABLE ... DROP COLUMN` names the function it would
+  break. Without it, the preview says `NOT VERIFIED`.
+- **Overloads are named.** `CREATE OR REPLACE FUNCTION f(int)` next to an
+  existing `f(text)` creates a second function; the preview says so.
+- **Rows are shown and revalidated.** An UPDATE or DELETE is approved on
+  its rows: the count, a sample, and a fingerprint of their ctids. If any
+  row joins, leaves or changes before the confirm, the confirm is refused.
+- **The confirm is the same rehearsal, committed only if it still
+  matches.** Same token (the file, the object as it stood, the rows), same
+  row count, and nothing broken that the approved preview did not show.
+  Otherwise it rolls back and says what moved.
+- **Refused, with the reason:** DO, CALL, SELECT, WITH, transaction
+  control, SET ROLE, temporary objects, psql meta-commands, several
+  statements in one file, statements that cannot run in a transaction
+  (`CREATE INDEX CONCURRENTLY`, `VACUUM`, ...), and an unqualified name that
+  `search_path` would send to another schema than the configured one.
+
+A rehearsal is bounded (`statement_timeout` 30 s, `lock_timeout` 5 s). It
+still runs triggers and advances sequences, and the preview of a DML
+statement says so. Exit codes follow pythia: `0` clean, `1` refused,
+`3` written but broken (with the restore command).
+
 ### Least privilege
 
 The read commands need only `LOGIN`: PostgreSQL's catalog is readable by
-every role. `errors` also needs `USAGE` on the schema. Exit codes follow
-pythia: `0` clean, `1` refused, with the reason and the next step.
+every role. `errors` also needs `USAGE` on the schema. Writing needs what
+the statement needs (to replace a function, owning it), and the preview
+warns when the account is a superuser, can create roles, or owns the
+schema. Set the agent role's search path to the schema it works in:
+`ALTER ROLE app_agent IN DATABASE app SET search_path = app_owner, public`.
 
 ## Tests
 
 ```bash
-python tests/test_postgres.py   # no database, no psycopg: a stand-in catalog answers by query file
+python tests/test_postgres.py   # no database, no psycopg: a stand-in catalog answers by query file; the statement reader
 python tests/live_check.py      # a disposable server only (see its docstring)
 ```
 
@@ -121,7 +172,9 @@ one (`../pythia-core`), or at `PYTHIA_CORE_SRC`. CI runs it on Ubuntu,
 Windows and macOS, Python 3.9 and 3.13. CI also runs the live check against
 a `postgres:16` service container. The live check loads
 [tests/fixtures/app_owner.sql](tests/fixtures/app_owner.sql) and checks
-every command against it, `errors` with and without `plpgsql_check`.
+every command against it: the reads, then the write gate end to end
+(preview, approve, confirm, restore, rows and verifications that moved).
+All of it runs with and without `plpgsql_check`.
 While pythia-core is private, CI needs a `PYTHIA_CORE_TOKEN` secret that can
 read it. CI tests against the pythia-core branch of the same name when one
 exists, so a change spanning both repositories is tested whole.

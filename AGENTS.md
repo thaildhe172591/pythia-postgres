@@ -1,9 +1,10 @@
 # Working in this repository / with this tool
 
 pythia-postgres is pythia for PostgreSQL, on pythia-core. It is pre-alpha:
-it reads everything pythia's Learn movement needs, and writes nothing.
+it reads everything pythia's Learn movement needs, and writes through one
+gate.
 
-## Using pythia-pg as an agent (Phase 1)
+## Using pythia-pg as an agent (Phase 2)
 
 1. **Ask the database, never the dump.** `ls`, `src`, `cols`, `ddl`, `grep`
    against the live schema; `check` says where unqualified names really
@@ -14,19 +15,33 @@ it reads everything pythia's Learn movement needs, and writes nothing.
    the list before writing code. Rows marked `[text]` are leads found by
    name in function source, not proofs. Relay the `blind spot` lines, and
    never call an impact list complete.
-3. **"Not verified" is said plainly.** `errors` printing `NOT VERIFIED`
-   means nothing was checked there. Never report it as "no errors".
-4. **Truncation is always announced.** If output has no truncation marker,
+3. **Writes go through `pythia-pg apply` only, one statement per file.**
+   Never write through `psql`, a driver script or another tool: those have
+   no snapshot, no rehearsal and no journal. (The guard that enforces this
+   arrives in Phase 3; until then it is this rule.)
+4. **The developer sees every preview.** Relay `apply`'s preview verbatim:
+   the diff, the rehearsal (what broke, or NOT VERIFIED), the rows, the
+   overload and destructive warnings. Then ask the developer to run
+   `pythia-pg approve <token>` in their own terminal — you cannot run it.
+   Pass `--confirm <token>` only after they say they approved. `--yes` and
+   loosening `policy` are the developer's actions, at a console.
+5. **Scope is what was asked.** Dependents that break are reported with a
+   proposal, never fixed on your own initiative.
+6. **Exit codes are the verdict:** `0` clean · `1` refused (relay the
+   reason; do not route around it) · `3` written but broken — never report
+   success; show the errors and the printed restore command. Never read
+   `$?` through a pipe.
+7. **Restores are writes.** `journal restore` previews and needs the same
+   approval as any apply.
+8. **"Not verified" is said plainly.** `errors` or a rehearsal printing
+   `NOT VERIFIED` means nothing was checked there. Never report it as clean.
+9. **Truncation is always announced.** If output has no truncation marker,
    you saw everything. If it has one, say so or fetch the rest with
    `--offset`.
-5. **It writes nothing yet, so neither do you through it.** Until `apply`
-   exists (Phase 2), propose a change as a file and let the developer run
-   it. Never write through `psql` or a driver script on pythia-pg's behalf.
-6. **Never open `.pythia/postgres/connections.json`.** It holds passwords.
-   `pythia-pg connections` lists the names, users, schemas and targets
-   without them.
-7. **Exit codes are the verdict:** `0` clean, `1` refused. Relay the reason;
-   do not route around it. Never read `$?` through a pipe.
+10. **Never open `.pythia/postgres/connections.json`, or anything under
+    `.pythia/postgres/grants/`.** The first holds passwords;
+    `pythia-pg connections` lists what you need. A grant written by anyone
+    but `approve` is a forged approval.
 
 ## Changing pythia-postgres itself
 

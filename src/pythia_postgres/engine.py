@@ -1,12 +1,12 @@
 """PostgreSQL, through psycopg 3, as a pythia-core engine.
 
-It answers the connect tier (pythia_core.engine.CONNECT) and the read tier
-(READ, in read.py). The write tier follows in Phase 2 (pythia-core's
-DESIGN.md §7).
+It answers every tier of pythia_core.engine: connect (here), read (read.py)
+and write (write.py) — the write tier rehearsing each statement inside a
+transaction, since PostgreSQL's DDL runs in one.
 """
 import sys
 
-from . import __version__, read
+from . import __version__, read, write
 from .catalog import QUERY_BINDS, QUERY_DIR, q  # noqa: F401 — QUERY_* re-exported
 
 CONFIG_REL = ".pythia/postgres/connections.json"
@@ -21,6 +21,19 @@ class PostgresEngine:
     version = __version__
     bind_style = "pyformat"
     default_port = 5432
+    # printed by `pythia-pg policy`: is rollback real, group by group?
+    rollback_notes = {
+        "source": "Yes — the definition is snapshotted before every write; a "
+                  "new object's undo is a DROP.",
+        "comments": "Yes — the previous comment is snapshotted.",
+        "data_dml": "No. After commit only a backup or point-in-time recovery "
+                    "brings rows back. Revalidation checks the rows; it is not "
+                    "an undo.",
+        "structural": "No. A dropped column or table is gone; the rehearsal "
+                      "shows what breaks before anything commits.",
+        "grants": "By hand — write the opposite GRANT or REVOKE.",
+        "session": "Not needed — it ends with the connection.",
+    }
 
     # --- the connection's life ------------------------------------------------
 
@@ -136,3 +149,35 @@ class PostgresEngine:
 
     def compile_errors(self, conn, schema, name):
         return read.compile_errors(conn, schema, name)
+
+    # --- the write tier (write.py) -----------------------------------------------
+
+    def classify(self, text):
+        return write.classify(text)
+
+    def prepare_statement(self, text, group):
+        return write.prepare_statement(text, group)
+
+    def parse_object(self, stmt, group):
+        return write.parse_object(stmt, group)
+
+    def destructive_reason(self, stmt, group):
+        return write.destructive_reason(stmt, group)
+
+    def dml_probe(self, stmt):
+        return write.dml_probe(stmt)
+
+    def measure_row_set(self, conn, target, pred):
+        return write.measure_row_set(conn, target, pred)
+
+    def snapshot(self, conn, schema, group, ident):
+        return write.snapshot(conn, schema, group, ident)
+
+    def rehearse(self, conn, schema, group, stmt, ident, snapshot):
+        return write.rehearse(conn, schema, group, stmt, ident, snapshot)
+
+    def restore_statement(self, group, ident, before, outcome):
+        return write.restore_statement(group, ident, before, outcome)
+
+    def privilege_warning(self, conn, schema):
+        return write.privilege_warning(conn, schema)

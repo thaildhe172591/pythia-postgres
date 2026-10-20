@@ -31,8 +31,15 @@ QUERY_BINDS = {
     "name-candidates.sql": set(),
     "plpgsql-check-installed.sql": set(),
     "search-path-first.sql": {"s"},
+    "search-path-catalog.sql": set(),
     "plpgsql-check.sql": {"s", "n"},
     "plpgsql-unchecked.sql": {"s", "n"},
+    "code-objects.sql": {"s", "n"},
+    "comment-current.sql": {"s", "t", "c"},
+    "rehearsal-limits.sql": {"st", "lt"},
+    "session-power.sql": {"s"},
+    "row-set-count.sql": set(),
+    "row-set-sample.sql": set(),
 }
 
 

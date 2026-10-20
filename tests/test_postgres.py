@@ -503,6 +503,7 @@ HEAD = ("qname", "unlogged", "partition_key", "partition_of", "partition_bound")
 
 def test_table_ddl_is_rebuilt_column_by_column():
     conn = CatalogConn({
+        "search-path-catalog.sql": (("search_path",), [("pg_catalog",)]),
         "resolve.sql": resolving(T_ORDER),
         "table-head.sql": (HEAD, [("app.t_order", True, "RANGE (created)", None, None)]),
         "table-columns.sql": (("name", "data_type", "not_null", "default_expr",
@@ -529,9 +530,26 @@ def test_table_ddl_is_rebuilt_column_by_column():
         "COMMENT ON TABLE app.t_order IS 'x';"]
 
 
+def test_ddl_is_written_against_a_fixed_search_path():
+    """pg_get_expr and its kin print names relative to the session's
+    search_path; DDL meant to run elsewhere must not depend on it — so,
+    as pg_dump does, it is rebuilt with only pg_catalog on the path."""
+    conn = CatalogConn({
+        "search-path-catalog.sql": (("search_path",), [("pg_catalog",)]),
+        "resolve.sql": resolving(T_ORDER),
+        "table-head.sql": (HEAD, [("app.t_order", False, None, None, None)]),
+        "table-columns.sql": (("name", "data_type", "not_null", "default_expr",
+                               "identity", "generated"), []),
+        "table-constraints.sql": (("name", "definition"), []),
+        "table-extras.sql": (("statement",), [])})
+    read.ddl(conn, "app", "t_order")
+    assert conn.names()[0] == "search-path-catalog.sql"
+
+
 def test_partition_sequence_function_and_the_uncovered():
     part = (PG_CLASS, 40, "TABLE", "t_order_2026", "t_order_2026")
     conn = CatalogConn({
+        "search-path-catalog.sql": (("search_path",), [("pg_catalog",)]),
         "resolve.sql": resolving(part),
         "table-head.sql": (HEAD, [("app.t_order_2026", False, None, "app.t_order",
                                    "FOR VALUES FROM ('2026-01-01') TO ('2027-01-01')")]),
@@ -540,15 +558,18 @@ def test_partition_sequence_function_and_the_uncovered():
         "CREATE TABLE app.t_order_2026 PARTITION OF app.t_order FOR VALUES "
         "FROM ('2026-01-01') TO ('2027-01-01');")
     assert "table-columns.sql" not in conn.names()
-    fn = CatalogConn({"resolve.sql": resolving(F_TOTAL),
+    fn = CatalogConn({"search-path-catalog.sql": (("search_path",), [("pg_catalog",)]),
+                      "resolve.sql": resolving(F_TOTAL),
                       "source.sql": (("unit", "definition"),
                                      [("f_total(p_id bigint)",
                                        "CREATE OR REPLACE FUNCTION app.f_total()\n$f$\n")])})
     assert read.ddl(fn, "app", "f_total").endswith("$f$;")
     ft = (PG_CLASS, 50, "FOREIGN TABLE", "t_remote", "t_remote")
-    other = CatalogConn({"resolve.sql": resolving(ft)})
+    other = CatalogConn({"search-path-catalog.sql": (("search_path",), [("pg_catalog",)]),
+                         "resolve.sql": resolving(ft)})
     assert "does not rebuild the DDL of a FOREIGN TABLE" in read.ddl(other, "app", "t_remote")
-    assert read.ddl(CatalogConn({"resolve.sql": resolving()}), "app", "x") == ""
+    assert read.ddl(CatalogConn({"search-path-catalog.sql": (("search_path",), [("pg_catalog",)]),
+                                 "resolve.sql": resolving()}), "app", "x") == ""
 
 
 def test_source_and_grep_number_lines_the_same_way():
@@ -618,6 +639,150 @@ def test_errors_refuse_to_guess_without_usage_on_the_schema():
 
 def test_the_engine_answers_the_read_tier():
     assert engine_problems(PostgresEngine(), tiers=("connect", "read")) == []
+
+
+
+# --- the write tier: reading a statement, without a database ------------------
+
+from pythia_postgres import write  # noqa: E402
+
+
+def test_the_lexer_knows_postgres_quoting():
+    text = ("create function f() returns text language plpgsql as $body$\n"
+            "begin return 'a;b' || $x$;$x$; end; -- not a cut ;\n"
+            "$body$; /* outer /* nested ; */ still comment ; */\n"
+            "select E'it\\'s;', \"semi;colon\", $1;")
+    parts = write.split_statements(text)
+    assert len(parts) == 2, parts
+    assert parts[0].endswith("$body$") and parts[1].startswith("/* outer")
+    assert parts[1].endswith("$1") and not write.lex(text).unterminated
+    masked = write.lex(text).masked
+    assert "a;b" not in masked and "nested" not in masked and "semi" not in masked
+    assert len(masked) == len(text)
+    assert write.lex("select 'open").unterminated
+    assert write.lex("select $$ open").unterminated
+    assert write.lex("select 1;\n  \\i other.sql\n").meta
+
+
+def classified(text):
+    return write.classify(text)[0]
+
+
+def refusal(text):
+    group, why = write.classify(text)
+    assert group is None, (text, group)
+    return why
+
+
+def test_classify_sorts_every_statement_or_says_why_not():
+    assert classified("CREATE OR REPLACE FUNCTION f() RETURNS int AS 'select 1' LANGUAGE sql;") == "source"
+    assert classified("create procedure p() language sql as 'select 1'") == "source"
+    assert classified("-- header\ncreate or replace view v as select 1") == "source"
+    assert classified("comment on column app.t.c is 'x'") == "comments"
+    assert classified("UPDATE t_order SET status = 'PAID' WHERE id = 1") == "data_dml"
+    assert classified("insert into t_order (id) values (1)") == "data_dml"
+    assert classified("alter table t_order add column note text") == "structural"
+    assert classified("create materialized view m as select 1") == "structural"
+    assert classified("drop function f(integer)") == "structural"
+    assert classified("truncate t_order") == "structural"
+    assert classified("grant select on t_order to app_ro") == "grants"
+    assert classified("alter default privileges grant select on tables to app_ro") == "grants"
+    assert classified("set work_mem = '64MB'") == "session"
+    assert "DO" in refusal("do $$ begin delete from t_order; end $$")
+    assert "procedure's body" in refusal("call p_settle()")
+    assert "owns the transaction" in refusal("commit")
+    assert "owns the transaction" in refusal("set transaction isolation level serializable")
+    assert "inside a transaction" in refusal("create index concurrently ix on t_order (id)")
+    assert "inside a transaction" in refusal("vacuum t_order")
+    assert "who verifies" in refusal("set role app_owner")
+    assert "one statement per file" in refusal("insert into t values (1); insert into t values (2);")
+    assert "reads" in refusal("select f_order_total(1)")
+    assert "WITH" in refusal("with x as (delete from t returning *) select 1")
+    assert "temporary" in refusal("create temp table t (x int)")
+    assert "TABLE and COLUMN" in refusal("comment on function f() is 'x'")
+    assert "meta-command" in refusal("\\i other.sql")
+    assert "ends inside" in refusal("create function f() as $$ begin")
+    assert "no statement" in refusal("-- only a comment\n")
+    assert "Cannot classify" in refusal("vacuumdb everything")
+
+
+def test_parse_object_reads_the_name_as_postgres_would():
+    p = write.parse_object
+    assert p('CREATE OR REPLACE FUNCTION App.F_Total(p int) RETURNS int', "source") == \
+        {"type": "FUNCTION", "name": "f_total", "schema": "app"}
+    assert p('create function "MixedCase"() returns int', "source")["name"] == "MixedCase"
+    assert p("create or replace recursive view app.v_tree (n) as select 1", "source") == \
+        {"type": "VIEW", "name": "v_tree", "schema": "app"}
+    assert p("create procedure p_settle() language sql as 'select 1'", "source")["type"] == "PROCEDURE"
+    col = p("COMMENT ON COLUMN app.t_order.status IS 'x'", "comments")
+    assert (col["name"], col["schema"], col["table"], col["column"]) == \
+        ("t_order.status", "app", "t_order", "status")
+    tab = p('comment on table "T_Order" is null', "comments")
+    assert (tab["name"], tab["schema"], tab["column"]) == ("T_Order", None, None)
+    assert p("delete from t_order", "data_dml") is None
+
+
+def test_dml_probe_finds_the_rows_or_refuses_to_guess():
+    probe = write.dml_probe
+    assert probe("update t_order o set status = 'PAID' where o.id < 3 returning o.id") == \
+        ("t_order o", "o.id < 3")
+    assert probe("delete from only app.t_order where status = 'x;y'") == \
+        ("app.t_order", "status = 'x;y'")
+    assert probe("delete from t_order") == ("t_order", None)
+    # a trailing comment would comment out what the probe appends after it
+    assert probe("delete from t_order -- all of them?\n where id = 1 -- just one") \
+        == ("t_order", "id = 1")
+    assert probe("insert into t_order (id) values (1)") is None
+    for stmt, why in (
+            ("merge into t using s on t.id = s.id when matched then delete", "MERGE"),
+            ("update t set x = s.x from s where t.id = s.id", "FROM"),
+            ("delete from t using s where t.id = s.id", "USING"),
+            ("delete from t where id in (select id from s)", "subquery"),
+            ("delete from t where current of c", "CURRENT OF")):
+        try:
+            probe(stmt)
+        except SystemExit as e:
+            assert why in str(e), (stmt, str(e))
+        else:
+            raise AssertionError(f"probe guessed at: {stmt}")
+
+
+def test_destruction_is_named():
+    d = write.destructive_reason
+    assert d("drop table t_order", "structural").startswith("DROP removes")
+    assert "CASCADE" in d("drop table t_order cascade", "structural")
+    assert "TRUNCATE" in d("truncate t_order", "structural")
+    assert "column or constraint" in d("alter table t drop column x", "structural")
+    assert "renaming" in d("alter table t rename to t2", "structural")
+    assert "type" in d("alter table t alter column x type int", "structural")
+    assert "every row" in d("delete from t_order", "data_dml")
+    assert "always true" in d("update t set x = 1 where true", "data_dml")
+    assert d("delete from t where id = 1", "data_dml") is None
+    assert "REVOKE" in d("revoke select on t from app_ro", "grants")
+    assert "PUBLIC" in d("grant select on t to public", "grants")
+    assert d("comment on table t is 'drop table x'", "comments") is None
+
+
+def test_restore_puts_back_or_drops():
+    r = write.restore_statement
+    fn = {"type": "FUNCTION", "name": "f_total", "schema": None}
+    assert r("source", fn, "CREATE OR REPLACE FUNCTION app.f_total()\n$f$", {}) == \
+        "CREATE OR REPLACE FUNCTION app.f_total()\n$f$;"
+    assert r("source", fn, "", {"drop": "app.f_total(p_id bigint)"}) == \
+        "DROP FUNCTION app.f_total(p_id bigint);"
+    view = {"type": "VIEW", "name": "v_x", "schema": None}
+    assert r("source", view, "", {"drop": "app.v_x"}) == "DROP VIEW app.v_x;"
+    com = {"type": "COMMENT", "name": "t_order.status", "schema": "app",
+           "table": "t_order", "column": "status", "kind": "COLUMN"}
+    assert r("comments", com, "it's", {"schema": "app"}) == \
+        "COMMENT ON COLUMN app.t_order.status IS 'it''s';"
+    assert r("comments", com, "", {"schema": "app"}) == \
+        "COMMENT ON COLUMN app.t_order.status IS NULL;"
+
+
+def test_the_engine_answers_the_write_tier():
+    assert engine_problems(PostgresEngine(),
+                           tiers=("connect", "read", "write")) == []
 
 
 

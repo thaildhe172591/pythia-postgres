@@ -85,3 +85,6 @@ begin
   return (select count(*) from t_gone);
 end;
 $$;
+
+-- rows for the write checks: an UPDATE and a DELETE need a row set to show
+insert into t_order (status, total) values ('DRAFT', 10), ('DRAFT', 20), ('PAID', 30);

@@ -110,6 +110,9 @@ def table_ddl(conn, objid):
 
 
 def ddl(conn, schema, name):
+    # names printed back by the catalog follow search_path: fix it first, so
+    # the DDL means the same in whatever session runs it
+    q(conn, "search-path-catalog.sql")
     objs = resolve(conn, schema, name)
     if not objs:
         return ""

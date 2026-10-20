@@ -5,11 +5,13 @@
    the server itself.
 2. With PYTHIA_PG_LIVE_DISPOSABLE=1 only: tests/fixtures/app_owner.sql is
    loaded (it DROPS and recreates the app_owner and reporting schemas), and
-   every read command is checked against it — including a DDL round trip:
-   drop the table, run the DDL pythia-pg rebuilt, rebuild it again, compare.
+   every read command is checked against it; then the write gate end to end
+   (preview, approve, confirm, restore, overloads, rows that move, a
+   verification that moves); then a DDL round trip: drop the table, run the
+   DDL pythia-pg rebuilt, rebuild it again, compare.
 3. With PYTHIA_PG_LIVE_PLPGSQL_CHECK=1 as well: plpgsql_check is installed
-   for the run (the server must have the package) and `errors` is checked
-   with it, then dropped again.
+   for the run (the server must have the package), so `errors` and the
+   rehearsals are checked with it as well as without.
 
 Never point this at a shared database. Skipped unless PYTHIA_PG_LIVE_HOST is
 set; CI sets all three for a postgres service container.
@@ -170,13 +172,239 @@ def check_reads(entry, with_plpgsql_check):
             with admin(entry) as conn:
                 conn.execute("drop extension if exists plpgsql_check")
 
-    # the DDL round trip: what ddl prints must rebuild what it describes
+    return ddl
+
+
+def ddl_round_trip(entry, ddl):
+    """What ddl prints must rebuild what it describes — from any session:
+    with the schema on the role's search_path it must print the same."""
+    with admin(entry) as conn:
+        conn.execute(f"alter role current_user in database {entry['dbname']} "
+                     "set search_path = app_owner, public")
+    try:
+        on_path = pg(entry, "ddl", "t_order")["rows"][0]["DDL"]
+    finally:
+        with admin(entry) as conn:
+            conn.execute(f"alter role current_user in database {entry['dbname']} "
+                         "reset search_path")
+    assert on_path == ddl, (ddl, on_path)
     with admin(entry) as conn:
         conn.execute("drop table app_owner.t_order cascade")
         conn.execute(ddl)
     again = pg(entry, "ddl", "t_order")["rows"][0]["DDL"]
     assert again == ddl, (ddl, again)
     ok("ddl round trip: drop, run the rebuilt DDL, rebuild — identical")
+
+
+# --- the write gate, end to end --------------------------------------------------
+
+class Project:
+    """One project folder for a run of writes: the journal and the grants
+    have to outlive a single command."""
+
+    def __init__(self, entry):
+        self.td = tempfile.TemporaryDirectory()
+        self.root = pathlib.Path(self.td.name)
+        self.state = self.root / ".pythia" / "postgres"
+        self.state.mkdir(parents=True)
+        path = self.state / "connections.json"
+        path.write_text(json.dumps({"live": entry}), encoding="utf-8")
+        if os.name == "posix":
+            os.chmod(path, 0o600)
+
+    def file(self, name, text):
+        (self.root / name).write_text(text, encoding="utf-8")
+        return name
+
+    def run(self, *argv):
+        """(exit code, last stdout line parsed when it is JSON, the refusal)"""
+        from pythia_postgres import cli
+        keep = os.getcwd()
+        os.chdir(self.root)
+        out = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(out), \
+                    contextlib.redirect_stderr(io.StringIO()):
+                code, why = cli.main(list(argv)) or 0, ""
+        except SystemExit as e:
+            code, why = (e.code, "") if isinstance(e.code, int) else (1, str(e))
+        finally:
+            os.chdir(keep)
+        lines = out.getvalue().strip().splitlines()
+        doc = None
+        if lines and lines[-1].startswith("{"):
+            doc = json.loads(lines[-1])
+        return code, doc, why
+
+    def preview(self, name, text):
+        code, doc, why = self.run("apply", self.file(name, text), "--json")
+        assert code == 0 and doc, (code, why)
+        return doc
+
+    def approve(self, token):
+        """The developer's own act, at their own console."""
+        from pythia_core import human
+        human.FORCE_CONSOLE = True
+        try:
+            code, _, why = self.run("approve", token)
+            assert code == 0, why
+        finally:
+            human.FORCE_CONSOLE = None
+
+    def confirm(self, *argv):
+        code, doc, why = self.run(*argv, "--json")
+        return code, doc, why
+
+    def policy(self, **groups):
+        (self.state / "policy.json").write_text(json.dumps(groups), encoding="utf-8")
+
+
+def scalar(entry, sql):
+    with admin(entry) as conn:
+        return conn.execute(sql).fetchone()[0]
+
+
+SOURCE = "select prosrc from pg_proc where oid = 'app_owner.f_order_total(bigint)'::regprocedure"
+CENTS = """-- f_order_total, in cents
+create or replace function f_order_total(p_id bigint) returns numeric
+language plpgsql as $$
+declare
+  v_total numeric;
+begin
+  select total * 100 into v_total from t_order where id = p_id;
+  raise notice 'total for % is % cents', p_id, v_total;
+  return coalesce(v_total, 0);
+end;
+$$;
+"""
+
+
+def check_writes(entry, with_plpgsql_check):
+    from pythia_core import human
+    human.FORCE_CONSOLE = False             # no person here unless one approves
+    with admin(entry) as conn:
+        # where the agent's unqualified names land, as an application role has it
+        conn.execute(f"alter role current_user in database {entry['dbname']} "
+                     "set search_path = app_owner, public")
+        if with_plpgsql_check:
+            conn.execute("create extension if not exists plpgsql_check")
+    p = Project(entry)
+    try:
+        _writes(entry, p, with_plpgsql_check)
+    finally:
+        human.FORCE_CONSOLE = None
+        with admin(entry) as conn:
+            conn.execute(f"alter role current_user in database {entry['dbname']} "
+                         "reset search_path")
+            conn.execute("drop extension if exists plpgsql_check")
+
+
+def _writes(entry, p, checked):
+    original = scalar(entry, SOURCE)
+
+    doc = p.preview("cents.sql", CENTS)
+    assert doc["object"] == "f_order_total(p_id bigint)" and doc["changed_lines"] == 3
+    assert doc["will_apply"] is False and scalar(entry, SOURCE) == original
+    assert doc["rehearsal"]["verified"] is checked, doc["rehearsal"]
+    if not checked:
+        assert "not installed" in doc["rehearsal"]["blind"]
+    token = doc["token"]
+    ok("apply previews: rehearsed, rolled back, the database unchanged")
+
+    code, _, why = p.run("approve", token)
+    assert code == 1 and "real console" in why
+    code, _, why = p.confirm("apply", "cents.sql", "--confirm", token)
+    assert code == 1 and "no developer approval is on file" in why
+    assert scalar(entry, SOURCE) == original
+    ok("no console, no approval: nothing written")
+
+    p.approve(token)
+    code, res, why = p.confirm("apply", "cents.sql", "--confirm", token)
+    assert code == 0 and res["applied"], (code, why, res)
+    body = scalar(entry, SOURCE)
+    assert "total * 100" in body and "'total for % is % cents'" in body
+    ok("approved and confirmed: written once, a % in the body kept as written")
+
+    code, _, why = p.confirm("apply", "cents.sql", "--confirm", token)
+    assert code == 1 and "already used" in why
+    ok("one approval, one write")
+
+    code, doc, _ = p.run("journal", "restore", res["restore"].split()[-1], "--json")
+    assert code == 0 and doc["will_apply"] is False
+    p.approve(doc["token"])
+    code, _, why = p.confirm("journal", "restore", res["restore"].split()[-1],
+                             "--confirm", doc["token"])
+    assert code == 0, why
+    assert scalar(entry, SOURCE) == original
+    ok("journal restore: previewed, approved, written — the original is back")
+
+    doc = p.preview("overload.sql", "create or replace function "
+                    "f_order_total(p_id integer) returns numeric language sql "
+                    "as 'select 0'")
+    assert doc["created"] is True and "new overload" in doc["rehearsal"]["notes"][0]
+    ok("a new overload is named, and the old one said to stay callable")
+
+    code, _, why = p.run("apply", p.file("bad.sql", "create or replace function "
+                                         "f_bad() returns int language plpgsql "
+                                         "as $$ begin retrun 1; end $$"))
+    assert code == 1 and 'syntax error at or near "retrun"' in why
+    ok("a statement that fails in rehearsal has nothing to approve")
+
+    p.policy(data_dml="confirm", structural="confirm")
+    doc = p.preview("paid.sql", "update t_order set status = 'PAID' "
+                    "where status = 'DRAFT'")
+    assert doc["row_set"]["count"] == 2 and doc["rehearsal"]["rows"] == 2
+    p.approve(doc["token"])
+    with admin(entry) as conn:      # someone else moves the rows meanwhile
+        conn.execute("update app_owner.t_order set status = 'DRAFT' where status = 'PAID'")
+    code, _, why = p.confirm("apply", "paid.sql", "--confirm", doc["token"])
+    assert code == 1 and "row set moved" in why and "2 rows when you approved it, 3 now" in why
+    assert scalar(entry, "select count(*) from app_owner.t_order where status = 'DRAFT'") == 3
+    doc = p.preview("paid.sql", "update t_order set status = 'PAID' "
+                    "where status = 'DRAFT'")
+    p.approve(doc["token"])
+    code, res, why = p.confirm("apply", "paid.sql", "--confirm", doc["token"])
+    assert code == 0 and res["rows"] == 3, (why, res)
+    assert scalar(entry, "select count(*) from app_owner.t_order where status = 'DRAFT'") == 0
+    ok("DML: approved on its rows; rows that moved are refused, then written")
+
+    doc = p.preview("comment.sql", "comment on column t_order.status is 'paid or not'")
+    p.approve(doc["token"])
+    code, res, why = p.confirm("apply", "comment.sql", "--confirm", doc["token"])
+    assert code == 0, why
+    col = ("select col_description('app_owner.t_order'::regclass, "
+           "(select attnum from pg_attribute where attrelid = "
+           "'app_owner.t_order'::regclass and attname = 'status'))")
+    assert scalar(entry, col) == "paid or not"
+    code, doc, _ = p.run("journal", "restore", res["restore"].split()[-1], "--json")
+    p.approve(doc["token"])
+    assert p.confirm("journal", "restore", res["restore"].split()[-1],
+                     "--confirm", doc["token"])[0] == 0
+    assert scalar(entry, col) == "DRAFT until paid"
+    ok("a comment: written, and restored to the one it replaced")
+
+    drop = "alter table t_order drop column total"
+    doc = p.preview("drop.sql", drop)
+    assert doc["destructive"].startswith("ALTER ... DROP")
+    if not checked:
+        assert doc["rehearsal"]["verified"] is False
+        ok("structural: destructive named; not verified without plpgsql_check")
+        return
+    assert ["f_order_total(p_id bigint)", "FUNCTION",
+            'column "total" does not exist'] in doc["rehearsal"]["broken"], doc
+    ok("structural: the rehearsal shows the PL/pgSQL function it would break")
+
+    p.approve(doc["token"])
+    with admin(entry) as conn:     # after approval, more code comes to depend on it
+        conn.execute("create function app_owner.f_order_tax(p_id bigint) "
+                     "returns numeric language plpgsql as $$ begin return "
+                     "(select total * 0.1 from app_owner.t_order where id = "
+                     "p_id); end $$")
+    code, _, why = p.confirm("apply", "drop.sql", "--confirm", doc["token"])
+    assert code == 1 and "verification moved" in why and "f_order_tax" in why, why
+    assert scalar(entry, "select count(*) from pg_attribute where attrelid = "
+                         "'app_owner.t_order'::regclass and attname = 'total'") == 1
+    ok("a verification that moved after approval is rolled back")
 
 
 def main():
@@ -186,11 +414,14 @@ def main():
         return
     check_connect(entry_from_env("public"))
     if env.get("PYTHIA_PG_LIVE_DISPOSABLE") != "1":
-        print("SKIP read commands: PYTHIA_PG_LIVE_DISPOSABLE=1 is not set, and "
-              "they load a fixture that drops schemas")
+        print("SKIP read and write commands: PYTHIA_PG_LIVE_DISPOSABLE=1 is not "
+              "set, and they load a fixture that drops schemas")
     else:
-        check_reads(entry_from_env("app_owner"),
-                    env.get("PYTHIA_PG_LIVE_PLPGSQL_CHECK") == "1")
+        entry = entry_from_env("app_owner")
+        checked = env.get("PYTHIA_PG_LIVE_PLPGSQL_CHECK") == "1"
+        ddl = check_reads(entry, checked)
+        check_writes(entry, checked)
+        ddl_round_trip(entry, ddl)
     print("OK")
 
 

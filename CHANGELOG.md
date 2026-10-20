@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.3.0.dev0 — unreleased
+
+Phase 2 of the plan in pythia-core's DESIGN.md: the write tier, behind
+pythia-core 0.3.0.dev0's gate.
+
+- **`pythia-pg apply` rehearses every write.** The statement runs inside a
+  transaction and is verified, then rolled back. The preview shows what
+  happened:
+  - the definition before and after, as PostgreSQL prints both;
+  - what `plpgsql_check` says the change broke, compared with just before;
+  - the rows an UPDATE or DELETE touches;
+  - a new overload, named as one.
+
+  `apply --confirm` runs it again and commits only what was approved.
+- **A reader that knows PostgreSQL's quoting:** `'…'`, `E'…'`, `"…"`,
+  `$tag$…$tag$`, nested comments. One statement per file. Refused, each with
+  its reason: DO, CALL, SELECT, WITH, transaction control, SET ROLE,
+  temporary objects, psql meta-commands, and statements that cannot run in
+  a transaction (`CREATE INDEX CONCURRENTLY`, `VACUUM`, ...).
+- **Rows are revalidated by ctid.** An UPDATE or DELETE is approved on its
+  count and a fingerprint of the rows' ctids, so a row that joined, left or
+  was updated meanwhile refuses the confirm. MERGE, joins and subqueries
+  are refused, because their row set cannot be shown.
+- **Statement text runs exactly as written.** No driver parameters are
+  used, so a `%` in a RAISE format or a LIKE pattern stays a `%`.
+- **Restores:** the definition a write replaced, a DROP for a new object,
+  the previous comment (or NULL). Each is a write through the same gate.
+- **Rehearsals are bounded:** `statement_timeout` 30 s, `lock_timeout` 5 s.
+- **`ddl` is rebuilt with only `pg_catalog` on search_path**, as pg_dump
+  does. Before, a default like `nextval('seq_order')` came out unqualified
+  when the schema was on the reader's path, and failed elsewhere. The DDL
+  round trip found it.
+- **Live check:** preview, approve, confirm and restore on a real server.
+  Rows that moved and a verification that moved are both rolled back. A
+  `DROP COLUMN` shows the function it would break. All of it runs with and
+  without plpgsql_check.
+
 ## 0.2.0.dev0 — unreleased
 
 Phase 1 of the plan in pythia-core's DESIGN.md: the read tier. Needs
