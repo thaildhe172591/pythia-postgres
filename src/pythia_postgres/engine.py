@@ -2,7 +2,8 @@
 
 It answers every tier of pythia_core.engine: connect (here), read (read.py),
 write (write.py) — the write tier rehearsing each statement inside a
-transaction, since PostgreSQL's DDL runs in one — and harness (guard.py).
+transaction, since PostgreSQL's DDL runs in one — release (a script split
+where PostgreSQL would split it) and harness (guard.py).
 """
 import copy
 import sys
@@ -182,6 +183,11 @@ class PostgresEngine:
 
     def privilege_warning(self, conn, schema):
         return write.privilege_warning(conn, schema)
+
+    # --- the release tier ----------------------------------------------------------
+
+    def split_script(self, text):
+        return write.split_script(text)
 
     # --- the harness tier (guard.py) ---------------------------------------------
 

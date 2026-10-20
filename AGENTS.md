@@ -5,7 +5,7 @@ it reads everything pythia's Learn movement needs, and writes through one
 gate. `pythia-pg install` wires a project: the guard, the session brief and
 the `pythia-pg-*` skills (`using-pythia-pg` routes).
 
-## Using pythia-pg as an agent (Phase 3b)
+## Using pythia-pg as an agent (Phase 3c)
 
 1. **Ask the database, never the dump.** `ls`, `src`, `cols`, `ddl`, `grep`
    against the live schema; `check` says where unqualified names really
@@ -16,7 +16,8 @@ the `pythia-pg-*` skills (`using-pythia-pg` routes).
    the list before writing code. Rows marked `[text]` are leads found by
    name in function source, not proofs. Relay the `blind spot` lines, and
    never call an impact list complete.
-3. **Writes go through `pythia-pg apply` only, one statement per file.**
+3. **Writes go through `pythia-pg apply` (one statement per file) or
+   `pythia-pg deploy` (a release, one transaction) only.**
    Never write through `psql`, a driver script or another tool: those have
    no snapshot, no rehearsal and no journal. Where `pythia-pg install` wired
    the hooks, the guard denies them; where it did not, this rule still

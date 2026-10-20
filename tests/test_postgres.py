@@ -791,7 +791,7 @@ def test_the_engine_answers_the_write_tier():
 from pythia_core import harness, skills as skill_contract  # noqa: E402
 
 SKILL_NAMES = ("using-pythia-pg", "pythia-pg-explore", "pythia-pg-impact",
-               "pythia-pg-apply", "pythia-pg-verify")
+               "pythia-pg-apply", "pythia-pg-deploy", "pythia-pg-verify")
 
 
 @contextlib.contextmanager
@@ -817,9 +817,33 @@ def guard(root, command, tool="Bash"):
     return out and out["hookSpecificOutput"]["permissionDecision"]
 
 
-def test_the_engine_answers_the_harness_tier():
+def test_the_engine_answers_the_harness_and_release_tiers():
     assert engine_problems(PostgresEngine(), tiers=(
-        "connect", "read", "write", "harness")) == []
+        "connect", "read", "write", "harness", "release")) == []
+
+
+def test_a_script_splits_where_postgres_would_and_says_where_each_starts():
+    script = ("-- release 42\n"
+              "\n"
+              "create or replace function f_note(p text) returns text\n"
+              "language plpgsql as $body$\n"
+              "begin\n"
+              "  return p || ';';   -- a semicolon in a body\n"
+              "end;\n"
+              "$body$;\n"
+              "\n"
+              "/* the column */ alter table t_order add column note text;\n"
+              "update t_order set note = 'a;b' where id = 1;\n"
+              "comment on column t_order.note is 'free text'\n")
+    got = PostgresEngine().split_script(script)
+    assert [line for line, _ in got] == [3, 10, 11, 12], got
+    assert got[0][1].startswith("-- release 42") and got[0][1].endswith("$body$")
+    assert got[2][1] == "update t_order set note = 'a;b' where id = 1"
+    assert [write.classify(stmt)[0] for _, stmt in got] == [
+        "source", "structural", "data_dml", "comments"]
+    assert PostgresEngine().split_script("-- only a comment\n\n") == []
+    assert write.classify(PostgresEngine().split_script(
+        "\\i other.sql\nselect 1;")[0][1])[0] is None       # a psql meta-command
 
 
 def test_the_guard_denies_psql_writing_around_the_gate():

@@ -6,7 +6,7 @@ what [pythia](https://github.com/thaildhe172591/pythia) does on Oracle: the
 agent learns from the live catalog, asks a person before any write, and
 writes only through a gate that snapshots, verifies and reports honestly.
 
-**Pre-alpha (Phase 3b).** It reads everything pythia's Learn movement
+**Pre-alpha (Phase 3c).** It reads everything pythia's Learn movement
 needs, and it writes through one gate. Every write is rehearsed inside a
 transaction, shown, approved by the developer — in the agent's chat or at
 their console — and committed only as approved. `pythia-pg install` wires a project for an
@@ -19,7 +19,7 @@ What each gate stops, and what it does not, is in its
 
 | Works today | Next |
 |---|---|
-| `check`, `ls`, `src`, `cols`, `ddl`, `grep`, `deps`, `impact`, `errors`; `apply`, `approve` (console, chat, MCP), `policy`, `journal`, `history`; `install`, `doctor`, `skill lint`, the hooks, `mcp` | scripts (deploy), lint rules, autopilot leases (3c) |
+| `check`, `ls`, `src`, `cols`, `ddl`, `grep`, `deps`, `impact`, `errors`; `apply`, `deploy`, `approve` (console, chat, MCP), `policy`, `journal`, `history`; `install`, `doctor`, `skill lint`, the hooks, `mcp` | autopilot leases, lint rules (3d) |
 
 ## Install (from git while pre-alpha)
 
@@ -178,6 +178,28 @@ The developer approves through the first door that works:
 `pythia-pg doctor` warns about settings that would answer the chat door for
 the developer (`dontAsk` mode, an allow rule for AskUserQuestion, a hook
 matching every tool).
+
+### A release: `deploy`, one transaction
+
+```bash
+pythia-pg deploy 01_schema.sql 02_data.sql                    # preview the release as one transaction
+pythia-pg deploy 01_schema.sql 02_data.sql --confirm 9c41e0b2aa  # all of it, as approved, or none
+```
+
+A release — one or more scripts, statements ending in `;` — is rehearsed in
+one transaction: each statement in order, snapshotted before it runs, its
+rows and verification taken at its own point (an UPDATE of a column the
+release adds is rehearsed against that column), then everything rolls back.
+One card shows every statement, and one approval (a 10-digit token, through
+the same doors) covers the release; a single statement's token cannot be
+approved alone. The confirm checks that every statement is byte-identical
+to what was approved before anything runs, re-runs the release in one
+transaction, and commits only if every statement still matches. A statement
+that fails, or rows, objects or verifications that moved, roll back the
+whole release: nothing of it is left half-landed. Refused before anything
+runs: `SET` inside a release, and anything `apply` refuses.
+
+### One statement: `apply`
 
 One statement per file. `apply` sorts it into a group, and the policy
 decides: `source` (functions, procedures, views) and `comments` need the

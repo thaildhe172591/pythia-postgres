@@ -383,6 +383,8 @@ def _writes(entry, p, checked):
     assert scalar(entry, col) == "DRAFT until paid"
     ok("a comment: written, and restored to the one it replaced")
 
+    _release(entry, p)
+
     drop = "alter table t_order drop column total"
     doc = p.preview("drop.sql", drop)
     assert doc["destructive"].startswith("ALTER ... DROP")
@@ -405,6 +407,56 @@ def _writes(entry, p, checked):
     assert scalar(entry, "select count(*) from pg_attribute where attrelid = "
                          "'app_owner.t_order'::regclass and attname = 'total'") == 1
     ok("a verification that moved after approval is rolled back")
+
+
+HAS_NOTE = ("select count(*) from pg_attribute where attrelid = "
+            "'app_owner.t_order'::regclass and attname = 'note' and not attisdropped")
+RELEASE = ("-- release: a column, its first value, its comment\n"
+           "alter table t_order add column note text;\n"
+           "update t_order set note = 'first' where id = 1;\n"
+           "comment on column t_order.note is 'free text';\n")
+
+
+def _release(entry, p):
+    """deploy: rehearsed as one transaction, landed as one, or not at all."""
+    p.file("rel.sql", RELEASE)
+    code, doc, why = p.run("deploy", "rel.sql", "--json")
+    assert code == 0, why
+    assert [m["group"] for m in doc["members"]] == ["structural", "data_dml", "comments"]
+    # the UPDATE was rehearsed against the column the release adds before it
+    assert doc["members"][1]["row_set"]["count"] == 1, doc["members"][1]
+    assert scalar(entry, HAS_NOTE) == 0
+    ok("deploy previews a release as one transaction: DML on the column it adds")
+
+    code, _, why = p.run("approve", "--card", doc["members"][1]["token"])
+    assert code == 1 and "approved as a whole" in why
+    p.approve(doc["batch"])
+    with admin(entry) as conn:        # someone else changes the row meanwhile
+        conn.execute("update app_owner.t_order set total = total where id = 1")
+    code, _, why = p.confirm("deploy", "rel.sql", "--confirm", doc["batch"])
+    assert code == 1 and "statement 2" in why and "nothing was written" in why.lower(), why
+    assert scalar(entry, HAS_NOTE) == 0           # statement 1 did not land either
+    ok("a release whose rows moved after approval rolls back whole")
+
+    code, doc, why = p.run("deploy", "rel.sql", "--json")
+    p.approve(doc["batch"])
+    code, res, why = p.confirm("deploy", "rel.sql", "--confirm", doc["batch"])
+    assert code == 0 and res["applied"], (why, res)
+    assert scalar(entry, "select note from app_owner.t_order where id = 1") == "first"
+    assert scalar(entry, "select col_description('app_owner.t_order'::regclass, "
+                         "(select attnum from pg_attribute where attrelid = "
+                         "'app_owner.t_order'::regclass and attname = 'note'))") == "free text"
+    ok("an approved release lands whole, in one commit")
+
+    p.file("bad.sql", "alter table t_order add column note2 text;\n"
+                      "update t_order set nope = 1 where id = 1;\n")
+    code, _, why = p.run("deploy", "bad.sql")
+    assert code == 1 and "bad.sql:2" in why and "nope" in why, why
+    assert scalar(entry, "select count(*) from pg_attribute where attrelid = "
+                         "'app_owner.t_order'::regclass and attname = 'note2'") == 0
+    ok("a release that fails at statement 2 keeps nothing of statement 1")
+    with admin(entry) as conn:
+        conn.execute("alter table app_owner.t_order drop column note")
 
 
 def main():

@@ -149,6 +149,21 @@ def split_statements(text):
     return parts
 
 
+def split_script(text):
+    """(line, statement) for each statement of a script, in order, cut where
+    PostgreSQL would cut it — never inside a quote, a comment or a $$ body.
+    The line is where the statement's code starts, as an editor counts."""
+    lexed = lex(text)
+    out, start = [], 0
+    for cut in lexed.cuts + [len(text)]:
+        code = lexed.masked[start:cut]
+        if code.strip():
+            first = start + len(code) - len(code.lstrip())
+            out.append((text.count("\n", 0, first) + 1, text[start:cut].strip()))
+        start = cut + 1
+    return out
+
+
 def _code(stmt):
     """The statement's code: literals and comments blanked, lower case, one
     space between words."""

@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.6.0.dev0 — unreleased
+
+Phase 3c of the plan in pythia-core's DESIGN.md: the release, on pythia-core
+0.6.0.dev0.
+
+- **`pythia-pg deploy <files>`:** a release rehearsed and committed as one
+  PostgreSQL transaction under one approval — all of it, as approved, or
+  none of it. An UPDATE of a column the release adds is rehearsed against
+  that column.
+- **`split_script`:** scripts cut where PostgreSQL would cut them — never
+  inside a quote, a comment or a `$$` body — with the line each statement
+  starts on.
+- **The `pythia-pg-deploy` skill**, routed from `using-pythia-pg`.
+- **The live check lands a release** that adds a column, fills it and
+  comments it; rolls one back whole when its rows moved after approval; and
+  keeps nothing of a release that fails at its second statement.
+
 ## 0.5.0.dev0 — unreleased
 
 Phase 3b of the plan in pythia-core's DESIGN.md: approval from chat, on
