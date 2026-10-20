@@ -5,7 +5,7 @@ it reads everything pythia's Learn movement needs, and writes through one
 gate. `pythia-pg install` wires a project: the guard, the session brief and
 the `pythia-pg-*` skills (`using-pythia-pg` routes).
 
-## Using pythia-pg as an agent (Phase 3c)
+## Using pythia-pg as an agent (Phase 3d)
 
 1. **Ask the database, never the dump.** `ls`, `src`, `cols`, `ddl`, `grep`
    against the live schema; `check` says where unqualified names really
@@ -33,20 +33,26 @@ the `pythia-pg-*` skills (`using-pythia-pg` routes).
    developer's terminal, `pythia-pg approve <token>`. Pass
    `--confirm <token>` only after the approval arrives. `--yes` and
    loosening `policy` are the developer's actions, at a console.
-5. **Scope is what was asked.** Dependents that break are reported with a
+5. **Autopilot is the developer's delegation, not yours.** When they want
+   you to work without per-write approvals, request the narrowest lease
+   that fits (`pythia-pg autopilot request`) and ask once through a door.
+   Inside it, covered writes land without asking; outside it, the normal
+   gate applies. A paused lease means stop and show the developer. Report
+   every write with `pythia-pg autopilot report`.
+6. **Scope is what was asked.** Dependents that break are reported with a
    proposal, never fixed on your own initiative.
-6. **Exit codes are the verdict:** `0` clean · `1` refused (relay the
+7. **Exit codes are the verdict:** `0` clean · `1` refused (relay the
    reason; do not route around it) · `3` written but broken — never report
    success; show the errors and the printed restore command. Never read
    `$?` through a pipe.
-7. **Restores are writes.** `journal restore` previews and needs the same
+8. **Restores are writes.** `journal restore` previews and needs the same
    approval as any apply.
-8. **"Not verified" is said plainly.** `errors` or a rehearsal printing
+9. **"Not verified" is said plainly.** `errors` or a rehearsal printing
    `NOT VERIFIED` means nothing was checked there. Never report it as clean.
-9. **Truncation is always announced.** If output has no truncation marker,
+10. **Truncation is always announced.** If output has no truncation marker,
    you saw everything. If it has one, say so or fetch the rest with
    `--offset`.
-10. **Never open `.pythia/postgres/connections.json`, or anything under
+11. **Never open `.pythia/postgres/connections.json`, or anything under
     `.pythia/postgres/grants/`.** The first holds passwords;
     `pythia-pg connections` lists what you need. A grant written by anyone
     but `approve` is a forged approval.

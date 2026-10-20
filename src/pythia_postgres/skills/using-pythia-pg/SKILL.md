@@ -26,6 +26,7 @@ Opened the wrong one? Close it, no harm done.
 | "change / fix / add X" ("sửa", "thêm") | `pythia-pg-impact` | write, then `pythia-pg-apply` |
 | "land / apply this" — one statement | `pythia-pg-apply` | `pythia-pg-verify` |
 | "run this migration / script / release" ("chạy script") | `pythia-pg-deploy` | `pythia-pg-verify` |
+| "do it all without asking me" ("tự động hoàn toàn") | `pythia-pg-autopilot` — one lease, never a blank cheque | the task's own skills |
 | "undo / restore X" | `pythia-pg-apply` (a restore is a write) | `pythia-pg-verify` |
 | an error from PostgreSQL, a broken function | `pythia-pg-explore` (`errors`, `src`) | |
 | about to say done / fixed / works | `pythia-pg-verify` — evidence first | |

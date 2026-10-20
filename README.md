@@ -6,7 +6,7 @@ what [pythia](https://github.com/thaildhe172591/pythia) does on Oracle: the
 agent learns from the live catalog, asks a person before any write, and
 writes only through a gate that snapshots, verifies and reports honestly.
 
-**Pre-alpha (Phase 3c).** It reads everything pythia's Learn movement
+**Pre-alpha (Phase 3d).** It reads everything pythia's Learn movement
 needs, and it writes through one gate. Every write is rehearsed inside a
 transaction, shown, approved by the developer — in the agent's chat or at
 their console — and committed only as approved. `pythia-pg install` wires a project for an
@@ -19,7 +19,7 @@ What each gate stops, and what it does not, is in its
 
 | Works today | Next |
 |---|---|
-| `check`, `ls`, `src`, `cols`, `ddl`, `grep`, `deps`, `impact`, `errors`; `apply`, `deploy`, `approve` (console, chat, MCP), `policy`, `journal`, `history`; `install`, `doctor`, `skill lint`, the hooks, `mcp` | autopilot leases, lint rules (3d) |
+| `check`, `ls`, `src`, `cols`, `ddl`, `grep`, `deps`, `impact`, `errors`; `apply`, `deploy`, `approve` (console, chat, MCP), `autopilot`, `policy`, `journal`, `history`; `install`, `doctor`, `skill lint`, the hooks, `mcp` | lint rules (3e) |
 
 ## Install (from git while pre-alpha)
 
@@ -198,6 +198,25 @@ transaction, and commits only if every statement still matches. A statement
 that fails, or rows, objects or verifications that moved, roll back the
 whole release: nothing of it is left half-landed. Refused before anything
 runs: `SET` inside a release, and anything `apply` refuses.
+
+### Autopilot: one lease instead of every approval
+
+```bash
+pythia-pg autopilot request --groups source,comments --hours 2 --max-writes 30
+pythia-pg autopilot report      # every write under the lease, with its restore
+pythia-pg autopilot off         # anyone may revoke
+```
+
+When the developer wants the agent to work without approving each write,
+the agent requests a lease. Its card names the connection, the groups, the
+time, the number of writes and whether destructive statements are included,
+and nothing is delegated until the developer approves it through a door (or
+runs `pythia-pg autopilot on` at a console). While it lasts, `apply` and
+`deploy` land what it covers without `--confirm` — still snapshotted,
+rehearsed, verified and journaled. It never covers another connection, one
+marked `"protected": true` (or an `"env"` of prod / production / prd / live),
+a group or destructive statement the card did not name, or more than 1000
+rows; a write that breaks something, or five failures in a row, pause it.
 
 ### One statement: `apply`
 

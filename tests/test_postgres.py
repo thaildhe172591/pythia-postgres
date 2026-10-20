@@ -791,7 +791,8 @@ def test_the_engine_answers_the_write_tier():
 from pythia_core import harness, skills as skill_contract  # noqa: E402
 
 SKILL_NAMES = ("using-pythia-pg", "pythia-pg-explore", "pythia-pg-impact",
-               "pythia-pg-apply", "pythia-pg-deploy", "pythia-pg-verify")
+               "pythia-pg-apply", "pythia-pg-deploy", "pythia-pg-autopilot",
+               "pythia-pg-verify")
 
 
 @contextlib.contextmanager

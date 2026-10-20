@@ -384,6 +384,7 @@ def _writes(entry, p, checked):
     ok("a comment: written, and restored to the one it replaced")
 
     _release(entry, p)
+    _lease(entry, p)
 
     drop = "alter table t_order drop column total"
     doc = p.preview("drop.sql", drop)
@@ -457,6 +458,39 @@ def _release(entry, p):
     ok("a release that fails at statement 2 keeps nothing of statement 1")
     with admin(entry) as conn:
         conn.execute("alter table app_owner.t_order drop column note")
+
+
+def _lease(entry, p):
+    """autopilot: one approved lease lands covered writes, and nothing else."""
+    from pythia_core import human
+    code, doc, why = p.run("autopilot", "request", "--groups", "comments",
+                           "--max-writes", "2", "--json")
+    assert code == 0 and len(doc["token"]) == 8, why
+    p.file("c1.sql", "comment on table t_order is 'orders, under a lease'")
+    code, doc2, _ = p.run("apply", "c1.sql", "--json")
+    assert code == 0 and doc2["will_apply"] is False         # a request is no lease
+    human.FORCE_CONSOLE = True
+    try:
+        code, _, why = p.run("approve", doc["token"])
+        assert code == 0, why
+    finally:
+        human.FORCE_CONSOLE = False
+    code, res, why = p.run("apply", "c1.sql", "--json")
+    assert code == 0 and res["applied"] and res["confirmed_via"] == "autopilot", (why, res)
+    assert scalar(entry, "select obj_description('app_owner.t_order'::regclass)") \
+        == "orders, under a lease"
+    p.file("s1.sql", "alter table t_order add column under_lease int")
+    code, doc3, why = p.run("apply", "s1.sql", "--json")
+    assert code == 0 and doc3["will_apply"] is False, why
+    assert "does not cover structural" in doc3["autopilot"]["why"]
+    assert scalar(entry, "select count(*) from pg_attribute where attrelid = "
+                         "'app_owner.t_order'::regclass and attname = 'under_lease'") == 0
+    code, report, _ = p.run("autopilot", "report", "--json")
+    assert [w["verdict"] for w in report["writes"]] == ["ok"]
+    assert p.run("autopilot", "off")[0] == 0
+    with admin(entry) as conn:      # the round trip below compares with the fixture
+        conn.execute("comment on table app_owner.t_order is 'Customer orders'")
+    ok("autopilot: an approved lease lands a covered write, and only that")
 
 
 def main():

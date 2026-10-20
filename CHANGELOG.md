@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.7.0.dev0 — unreleased
+
+Phase 3d of the plan in pythia-core's DESIGN.md: autopilot leases, on
+pythia-core 0.7.0.dev0.
+
+- **`pythia-pg autopilot request | on | off | status | report`:** a lease the
+  developer approves once, through any door, covering only the connection,
+  groups, time and writes its card names. `apply` and `deploy` land covered
+  writes without `--confirm`, still rehearsed, verified and journaled.
+- **The `pythia-pg-autopilot` skill**, routed from `using-pythia-pg`;
+  AGENTS.md gains the autopilot rule.
+- **The live check lands a covered comment under a lease** and shows a
+  structural statement it does not cover staying a preview.
+
 ## 0.6.0.dev0 — unreleased
 
 Phase 3c of the plan in pythia-core's DESIGN.md: the release, on pythia-core
