@@ -1,0 +1,24 @@
+name: checkout pythia-core
+description: >-
+  Clone pythia-core into .core at the branch named like this run's branch when
+  pythia-core has one, else main — so a change that spans both repositories
+  is tested against its own core.
+inputs:
+  token:
+    description: a token that can read pythia-core (it is private while pre-alpha)
+    required: true
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        TOKEN: ${{ inputs.token }}
+        BRANCH: ${{ github.head_ref || github.ref_name }}
+      run: |
+        url="https://x-access-token:${TOKEN}@github.com/thaildhe172591/pythia-core"
+        ref=main
+        if git ls-remote --exit-code --heads "$url" "$BRANCH" >/dev/null 2>&1; then
+          ref="$BRANCH"
+        fi
+        echo "pythia-core at $ref"
+        git clone --quiet --depth 1 --branch "$ref" "$url" .core

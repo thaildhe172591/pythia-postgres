@@ -1,20 +1,32 @@
 # Working in this repository / with this tool
 
 pythia-postgres is pythia for PostgreSQL, on pythia-core. It is pre-alpha:
-read-only, connect-and-check only.
+it reads everything pythia's Learn movement needs, and writes nothing.
 
-## Using pythia-pg as an agent (Phase 0)
+## Using pythia-pg as an agent (Phase 1)
 
-1. **It writes nothing yet, so neither do you through it.** Until `apply`
+1. **Ask the database, never the dump.** `ls`, `src`, `cols`, `ddl`, `grep`
+   against the live schema; `check` says where unqualified names really
+   land.
+2. **Impact before change.** Run `pythia-pg impact <NAME>` before proposing
+   any modification. When it prints `! show this list to the developer`
+   (10 or more dependents, or one in another schema), show the developer
+   the list before writing code. Rows marked `[text]` are leads found by
+   name in function source, not proofs. Relay the `blind spot` lines, and
+   never call an impact list complete.
+3. **"Not verified" is said plainly.** `errors` printing `NOT VERIFIED`
+   means nothing was checked there. Never report it as "no errors".
+4. **Truncation is always announced.** If output has no truncation marker,
+   you saw everything. If it has one, say so or fetch the rest with
+   `--offset`.
+5. **It writes nothing yet, so neither do you through it.** Until `apply`
    exists (Phase 2), propose a change as a file and let the developer run
    it. Never write through `psql` or a driver script on pythia-pg's behalf.
-2. **Never open `.pythia/postgres/connections.json`.** It holds passwords.
+6. **Never open `.pythia/postgres/connections.json`.** It holds passwords.
    `pythia-pg connections` lists the names, users, schemas and targets
    without them.
-3. **Exit codes are the verdict:** `0` clean, `1` refused. Relay the reason;
+7. **Exit codes are the verdict:** `0` clean, `1` refused. Relay the reason;
    do not route around it. Never read `$?` through a pipe.
-4. **Ask the database, never the dump**, as with pythia: `pythia-pg check`
-   says where unqualified names really land.
 
 ## Changing pythia-postgres itself
 

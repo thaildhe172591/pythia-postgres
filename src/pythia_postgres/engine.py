@@ -1,25 +1,13 @@
 """PostgreSQL, through psycopg 3, as a pythia-core engine.
 
-Phase 0 answers the connect tier (pythia_core.engine.CONNECT): enough for
-`pythia-pg check` to open a read-only session and say where unqualified
-names land. The read and write tiers follow (pythia-core's DESIGN.md §7).
+It answers the connect tier (pythia_core.engine.CONNECT) and the read tier
+(READ, in read.py). The write tier follows in Phase 2 (pythia-core's
+DESIGN.md §7).
 """
-import pathlib
 import sys
 
-from pythia_core.queries import load_query, run_query
-
-from . import __version__
-
-QUERY_DIR = pathlib.Path(__file__).resolve().parent / "queries"
-
-# Bind contract: what each query file may use. tests/test_postgres.py fails
-# on drift in either direction, so queries/ stays reviewable without a
-# database.
-QUERY_BINDS = {
-    "server-version.sql": set(),
-    "current-schema.sql": set(),
-}
+from . import __version__, read
+from .catalog import QUERY_BINDS, QUERY_DIR, q  # noqa: F401 — QUERY_* re-exported
 
 CONFIG_REL = ".pythia/postgres/connections.json"
 REQUIRED = ("host", "dbname", "user")
@@ -116,10 +104,35 @@ class PostgresEngine:
     # --- what check asks --------------------------------------------------------
 
     def server_version(self, conn):
-        _, rows = run_query(conn, load_query(QUERY_DIR, "server-version.sql"))
-        version, database = rows[0]
+        version, database = q(conn, "server-version.sql")[1][0]
         return f"PostgreSQL {version} — database {database}"
 
     def current_schema(self, conn):
-        _, rows = run_query(conn, load_query(QUERY_DIR, "current-schema.sql"))
+        rows = q(conn, "current-schema.sql")[1]
         return rows[0][0] if rows and rows[0] and rows[0][0] else None
+
+    # --- the read tier (read.py) -------------------------------------------------
+
+    def object_names(self, conn, schema, pattern, fetch):
+        return read.object_names(conn, schema, pattern, fetch)
+
+    def source(self, conn, schema, name):
+        return read.source(conn, schema, name)
+
+    def columns(self, conn, schema, name):
+        return read.columns(conn, schema, name)
+
+    def ddl(self, conn, schema, name):
+        return read.ddl(conn, schema, name)
+
+    def grep(self, conn, schema, text, fetch):
+        return read.grep(conn, schema, text, fetch)
+
+    def dependencies(self, conn, schema, name, depth):
+        return read.dependencies(conn, schema, name, depth)
+
+    def dependents(self, conn, schema, name, depth):
+        return read.dependents(conn, schema, name, depth)
+
+    def compile_errors(self, conn, schema, name):
+        return read.compile_errors(conn, schema, name)

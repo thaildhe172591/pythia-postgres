@@ -2,13 +2,13 @@ name: ci
 
 on:
   push:
-    branches: [main]
+    branches: [main, "claude/**"]
   pull_request:
 
 # pythia-core is private while pre-alpha. GITHUB_TOKEN reaches only this
-# repository, so the core checkout needs a fine-grained token with read
-# access to pythia-core, stored as the PYTHIA_CORE_TOKEN secret. Once
-# pythia-core is public, the fallback to github.token is enough.
+# repository, so reading pythia-core needs a fine-grained token with read
+# access to it, stored as the PYTHIA_CORE_TOKEN secret. Once pythia-core is
+# public, the fallback to github.token is enough.
 
 jobs:
   test:
@@ -20,10 +20,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/checkout@v7
+      - uses: ./.github/actions/checkout-core
         with:
-          repository: thaildhe172591/pythia-core
-          path: .core
           token: ${{ secrets.PYTHIA_CORE_TOKEN || github.token }}
       - uses: actions/setup-python@v7
         with:
@@ -44,19 +42,23 @@ jobs:
           POSTGRES_PASSWORD: ci-only
         ports: ["5432:5432"]
         options: >-
-          --health-cmd pg_isready --health-interval 5s
+          --health-cmd "pg_isready -U postgres" --health-interval 5s
           --health-timeout 5s --health-retries 12
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/checkout@v7
+      - uses: ./.github/actions/checkout-core
         with:
-          repository: thaildhe172591/pythia-core
-          path: .core
           token: ${{ secrets.PYTHIA_CORE_TOKEN || github.token }}
       - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
       - run: pip install ./.core .
+      # the image carries the PGDG apt source; errors is checked without
+      # plpgsql_check and then with it
+      - name: plpgsql_check into the service container
+        run: >-
+          docker exec ${{ job.services.postgres.id }} sh -c
+          'apt-get update -qq && apt-get install -y -qq postgresql-16-plpgsql-check'
       - run: python tests/live_check.py
         env:
           PYTHIA_PG_LIVE_HOST: 127.0.0.1
@@ -64,15 +66,15 @@ jobs:
           PYTHIA_PG_LIVE_DB: postgres
           PYTHIA_PG_LIVE_USER: postgres
           PYTHIA_PG_LIVE_PASSWORD: ci-only
+          PYTHIA_PG_LIVE_DISPOSABLE: "1"
+          PYTHIA_PG_LIVE_PLPGSQL_CHECK: "1"
 
   package:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/checkout@v7
+      - uses: ./.github/actions/checkout-core
         with:
-          repository: thaildhe172591/pythia-core
-          path: .core
           token: ${{ secrets.PYTHIA_CORE_TOKEN || github.token }}
       - uses: actions/setup-python@v7
         with:
@@ -80,5 +82,5 @@ jobs:
       - run: pip wheel . --no-deps -w dist
       - run: pip install ./.core dist/*.whl
       # the console script and the queries must work outside the repo layout
-      - run: cd /tmp && pythia-pg version
-      - run: cd /tmp && python -c "from pythia_postgres.engine import QUERY_BINDS, QUERY_DIR; assert all((QUERY_DIR / q).is_file() for q in QUERY_BINDS)"
+      - run: cd /tmp && pythia-pg version && pythia-pg --help | grep -q impact
+      - run: cd /tmp && python -c "from pythia_postgres.catalog import QUERY_BINDS, QUERY_DIR; assert all((QUERY_DIR / q).is_file() for q in QUERY_BINDS)"
