@@ -1,12 +1,13 @@
 """PostgreSQL, through psycopg 3, as a pythia-core engine.
 
-It answers every tier of pythia_core.engine: connect (here), read (read.py)
-and write (write.py) — the write tier rehearsing each statement inside a
-transaction, since PostgreSQL's DDL runs in one.
+It answers every tier of pythia_core.engine: connect (here), read (read.py),
+write (write.py) — the write tier rehearsing each statement inside a
+transaction, since PostgreSQL's DDL runs in one — and harness (guard.py).
 """
+import copy
 import sys
 
-from . import __version__, read, write
+from . import __version__, guard, read, write
 from .catalog import QUERY_BINDS, QUERY_DIR, q  # noqa: F401 — QUERY_* re-exported
 
 CONFIG_REL = ".pythia/postgres/connections.json"
@@ -181,3 +182,20 @@ class PostgresEngine:
 
     def privilege_warning(self, conn, schema):
         return write.privilege_warning(conn, schema)
+
+    # --- the harness tier (guard.py) ---------------------------------------------
+
+    def raw_client_pattern(self):
+        return guard.CLIENTS
+
+    def write_sql_pattern(self):
+        return guard.WRITE_SQL
+
+    def script_pattern(self):
+        return guard.SCRIPT
+
+    def connections_template(self):
+        return copy.deepcopy(guard.TEMPLATE)
+
+    def skills_dir(self):
+        return guard.SKILLS_DIR

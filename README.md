@@ -6,18 +6,20 @@ what [pythia](https://github.com/thaildhe172591/pythia) does on Oracle: the
 agent learns from the live catalog, asks a person before any write, and
 writes only through a gate that snapshots, verifies and reports honestly.
 
-**Pre-alpha (Phase 2).** It reads everything pythia's Learn movement needs,
-and it writes through one gate. Every write is rehearsed inside a
+**Pre-alpha (Phase 3a).** It reads everything pythia's Learn movement
+needs, and it writes through one gate. Every write is rehearsed inside a
 transaction, shown, approved by the developer at their console, and
-committed only as approved. The road and how each pythia idea maps onto
+committed only as approved. `pythia-pg install` wires a project for an
+agent: a guard that denies `psql` writing around the gate, the rules in
+every session, and the `pythia-pg-*` skills. The road and how each pythia idea maps onto
 PostgreSQL are in pythia-core's
 [DESIGN.md](https://github.com/thaildhe172591/pythia-core/blob/main/DESIGN.md).
 What each gate stops, and what it does not, is in its
 [SECURITY.md](https://github.com/thaildhe172591/pythia-core/blob/main/SECURITY.md).
 
-| Works today | Next (Phase 3) |
+| Works today | Next |
 |---|---|
-| `check`, `ls`, `src`, `cols`, `ddl`, `grep`, `deps`, `impact`, `errors`; `apply`, `approve`, `policy`, `journal`, `history` | approval from chat, a `psql` guard, skills, scripts (deploy), autopilot leases |
+| `check`, `ls`, `src`, `cols`, `ddl`, `grep`, `deps`, `impact`, `errors`; `apply`, `approve`, `policy`, `journal`, `history`; `install`, `doctor`, `skill lint`, the hooks | approval from chat (3b); scripts (deploy), lint rules, autopilot leases (3c) |
 
 ## Install (from git while pre-alpha)
 
@@ -29,10 +31,50 @@ pip install "git+https://github.com/thaildhe172591/pythia-core" \
 That brings psycopg 3 with its own libpq (`psycopg[binary]`), so no
 PostgreSQL client needs installing.
 
+## Set up a project for an agent
+
+```bash
+cd your-project
+pythia-pg install     # once; a second run changes nothing
+pythia-pg doctor      # is everything wired? exit 1 names what is not
+```
+
+`install` writes, and leaves everything else as it was:
+
+- `.pythia/postgres/connections.json`, mode 600, created once from the
+  template — the developer fills in the passwords; an agent never opens it;
+- `.gitignore` lines for that file, this machine's approvals
+  (`.pythia/postgres/grants/`) and `.claude/settings.local.json`;
+- `.claude/settings.local.json`: the hooks, spelled with this interpreter's
+  absolute path so they start whether or not a virtual environment is
+  active, and deny rules for the engine's files;
+- a `pythia-pg` block in CLAUDE.md and AGENTS.md (pythia for Oracle's block,
+  and the developer's own text, are left alone);
+- the skills, in `.claude/skills` and `.agents/skills`: `using-pythia-pg`
+  (the router), `pythia-pg-explore`, `pythia-pg-impact`, `pythia-pg-apply`,
+  `pythia-pg-verify`.
+
+Restart the agent's session after installing, so the hooks load. Each
+session then starts with the rules and a `STATE` line (connections, the
+write policy). Before every tool call the guard decides:
+
+| The agent runs | The guard |
+|---|---|
+| `psql` given write SQL, `-f`, `< file`, a pipe, `\i`; `pg_restore` — also behind `docker exec`, `ssh`, `sudo` or `bash -c` | denies: writes go through `pythia-pg apply` |
+| an MCP SQL tool given write SQL | denies |
+| reading `connections.json`; editing `policy.json`, the journal or a grant; setting `PYTHIA_PG_CI`; calling `grants.mint` from a one-liner | denies |
+| a `pythia-pg` read, a preview, `approve --card` | allows without a prompt |
+| `apply --confirm <token>` the developer already approved on this connection | allows; apply re-verifies it |
+| `psql` reads, `approve`, `--yes`, `policy set`, anything compound | stays out: the client asks |
+
+The guard reads a command for what it names, not what it means: it can
+deny a harmless command and miss a write spelled in a way it does not
+list. The gate behind it holds either way (pythia-core's SECURITY.md).
+
 ## Connections
 
 `.pythia/postgres/connections.json` in the project root, owner-readable only
-(`chmod 600`), and out of git (`.pythia/` in `.gitignore`). Template:
+(`chmod 600`), and out of git — `pythia-pg install` does all three. Template:
 [examples/connections.example.json](examples/connections.example.json).
 
 ```json
@@ -163,7 +205,7 @@ schema. Set the agent role's search path to the schema it works in:
 ## Tests
 
 ```bash
-python tests/test_postgres.py   # no database, no psycopg: a stand-in catalog answers by query file; the statement reader
+python tests/test_postgres.py   # no database, no psycopg: a stand-in catalog answers by query file; the statement reader; the guard's patterns; the skills
 python tests/live_check.py      # a disposable server only (see its docstring)
 ```
 

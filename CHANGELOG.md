@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.4.0.dev0 — unreleased
+
+Phase 3a of the plan in pythia-core's DESIGN.md: the harness, on pythia-core
+0.4.0.dev0.
+
+- **The harness tier** (`guard.py`): the clients the guard watches (`psql`,
+  `pgcli`, `pg_restore`); the SQL that writes, including what writes from a
+  plain SELECT (`nextval`, `setval`, `pg_terminate_backend`, `SELECT ...
+  INTO`), DO, CALL, `\copy ... from` and `\i`; how psql reads a script
+  (`-f`, `--file`, `< file`, a pipe — `-F` is a field separator and is not
+  one). Reads through `psql` are left to the client's prompt.
+- **`pythia-pg install`** scaffolds the connections template from
+  `examples/connections.example.json`, wires the hooks, writes the
+  `pythia-pg` block into CLAUDE.md and AGENTS.md, and installs the skills.
+  **`pythia-pg doctor`** checks each piece.
+- **Five skills:** `using-pythia-pg` (the router), `pythia-pg-explore`,
+  `pythia-pg-impact`, `pythia-pg-apply` (with every refusal and its way
+  forward in `reference/refusals.md`), `pythia-pg-verify`. They ship in the
+  wheel, and a test holds each to the skill contract and the router to the
+  pack.
+
 ## 0.3.0.dev0 — unreleased
 
 Phase 2 of the plan in pythia-core's DESIGN.md: the write tier, behind

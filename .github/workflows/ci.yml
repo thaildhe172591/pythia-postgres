@@ -84,3 +84,9 @@ jobs:
       # the console script and the queries must work outside the repo layout
       - run: cd /tmp && pythia-pg version && pythia-pg --help | grep -q impact
       - run: cd /tmp && python -c "from pythia_postgres.catalog import QUERY_BINDS, QUERY_DIR; assert all((QUERY_DIR / q).is_file() for q in QUERY_BINDS)"
+      # the skills ship, and install wires a fresh project that doctor passes
+      - run: >-
+          mkdir /tmp/scratch-project && cd /tmp/scratch-project &&
+          pythia-pg install && pythia-pg doctor &&
+          test -f .claude/skills/pythia-pg-apply/reference/refusals.md &&
+          test -f .agents/skills/using-pythia-pg/SKILL.md

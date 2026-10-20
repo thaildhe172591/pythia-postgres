@@ -2,9 +2,10 @@
 
 pythia-postgres is pythia for PostgreSQL, on pythia-core. It is pre-alpha:
 it reads everything pythia's Learn movement needs, and writes through one
-gate.
+gate. `pythia-pg install` wires a project: the guard, the session brief and
+the `pythia-pg-*` skills (`using-pythia-pg` routes).
 
-## Using pythia-pg as an agent (Phase 2)
+## Using pythia-pg as an agent (Phase 3a)
 
 1. **Ask the database, never the dump.** `ls`, `src`, `cols`, `ddl`, `grep`
    against the live schema; `check` says where unqualified names really
@@ -17,8 +18,10 @@ gate.
    never call an impact list complete.
 3. **Writes go through `pythia-pg apply` only, one statement per file.**
    Never write through `psql`, a driver script or another tool: those have
-   no snapshot, no rehearsal and no journal. (The guard that enforces this
-   arrives in Phase 3; until then it is this rule.)
+   no snapshot, no rehearsal and no journal. Where `pythia-pg install` wired
+   the hooks, the guard denies them; where it did not, this rule still
+   binds. No `STATE` line at session start means the hooks are not
+   running: say so, and ask the developer to run `pythia-pg doctor`.
 4. **The developer sees every preview.** Relay `apply`'s preview verbatim:
    the diff, the rehearsal (what broke, or NOT VERIFIED), the rows, the
    overload and destructive warnings. Then ask the developer to run
@@ -58,8 +61,13 @@ gate.
   it).
 - **Engine-neutral logic goes to pythia-core.** If an answer would be the
   same on SQL Server or MongoDB, it does not belong here (DESIGN.md §3).
+- **Skills:** `src/pythia_postgres/skills/<name>/SKILL.md`, `name` = folder,
+  prefixed `pythia-pg-` (or `using-pythia-pg`), description opening with
+  `Use when` / `Use before`, a `**Phase:**` line, at most 150 lines (detail
+  in `reference/`), and a row in `using-pythia-pg`'s routing table. A test
+  holds every one to it.
 - **Docs never contradict code:** a behaviour change updates the docstring,
-  README.md and CHANGELOG.md in the same change.
+  README.md, CHANGELOG.md and the affected skill in the same change.
 - **Versions** agree in pyproject.toml and `pythia_postgres.__version__`.
 
 ## Never

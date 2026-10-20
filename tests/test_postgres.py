@@ -786,6 +786,109 @@ def test_the_engine_answers_the_write_tier():
 
 
 
+# --- the harness tier: the guard's patterns, the template, the skills ----------
+
+from pythia_core import harness, skills as skill_contract  # noqa: E402
+
+SKILL_NAMES = ("using-pythia-pg", "pythia-pg-explore", "pythia-pg-impact",
+               "pythia-pg-apply", "pythia-pg-verify")
+
+
+@contextlib.contextmanager
+def scratch_project():
+    keep = {k: os.environ.pop(k) for k in list(os.environ) if k.startswith("PYTHIA_")}
+    with tempfile.TemporaryDirectory() as td:
+        root = pathlib.Path(td).resolve()
+        cfg = root / ".pythia" / "postgres" / "connections.json"
+        cfg.parent.mkdir(parents=True)
+        cfg.write_text(json.dumps({"dev": {"host": "localhost", "dbname": "app",
+                                           "user": "u", "schema": "app_owner"}}),
+                       encoding="utf-8")
+        try:
+            yield root
+        finally:
+            os.environ.update(keep)
+
+
+def guard(root, command, tool="Bash"):
+    tin = {"command": command} if tool == "Bash" else {"sql": command}
+    out = harness.pre_tool_decision(PostgresEngine(), {
+        "tool_name": tool, "tool_input": tin, "cwd": str(root)})
+    return out and out["hookSpecificOutput"]["permissionDecision"]
+
+
+def test_the_engine_answers_the_harness_tier():
+    assert engine_problems(PostgresEngine(), tiers=(
+        "connect", "read", "write", "harness")) == []
+
+
+def test_the_guard_denies_psql_writing_around_the_gate():
+    with scratch_project() as root:
+        for cmd in ('psql -d app -c "drop table app_owner.t_order"',
+                    'psql -c "CREATE OR REPLACE FUNCTION f() RETURNS int AS $$ select 1 $$ LANGUAGE sql"',
+                    'PGPASSWORD=x psql -h localhost -c "update t_order set status = 1"',
+                    'psql app -c "delete from t_order"',
+                    'psql app -c "insert into t_order values (1)"',
+                    'psql app -c "truncate t_order"',
+                    'psql app -c "alter table t_order add column x int"',
+                    'psql app -c "grant select on t_order to reporting"',
+                    'psql app -c "comment on table t_order is \'x\'"',
+                    "psql app -c \"select setval('seq_order', 1)\"",
+                    "psql app -c \"select nextval('seq_order')\"",
+                    'psql app -c "\\copy t_order from orders.csv"',
+                    'psql app -c "do $$ begin perform 1; end $$"',
+                    'psql app -c "call p_close_orders()"',
+                    'psql app -c "refresh materialized view mv_orders"',
+                    'psql app -c "select * into t_order_copy from t_order"',
+                    "psql -h db -U app -d app -f release.sql",
+                    "psql --file=release.sql app", "psql -1 -frelease.sql app",
+                    "psql app < release.sql", 'psql app -c "\\i release.sql"',
+                    "cat release.sql | psql app", "pg_restore -d app backup.dump",
+                    "/usr/lib/postgresql/16/bin/psql -c 'drop view v_order'",
+                    'docker exec db psql -U postgres -c "drop table t_order"'):
+            assert guard(root, cmd) == "deny", cmd
+
+
+def test_the_guard_leaves_psql_reads_to_the_client():
+    with scratch_project() as root:
+        for cmd in ('psql -d app -c "select count(*) from t_order"',
+                    "psql -At -F , -c 'select id from t_order'",
+                    "psql -l", "psql --version",
+                    "pg_dump -s -t t_order app",
+                    'psql app -c "select updated_at, created_by from t_order"'):
+            assert guard(root, cmd) is None, cmd
+        assert guard(root, 'pythia-pg ls "t_order%"') == "allow"
+        assert guard(root, "DROP TABLE t_order", tool="mcp__postgres__query") == "deny"
+        assert guard(root, "select 1", tool="mcp__postgres__query") is None
+
+
+def test_install_scaffolds_the_example_config():
+    example = json.loads((ROOT / "examples" / "connections.example.json")
+                         .read_text(encoding="utf-8"))
+    assert PostgresEngine().connections_template() == example
+
+
+def test_the_skill_pack_holds_the_contract_and_routes_every_skill():
+    pack = skill_contract.pack(PostgresEngine().skills_dir())
+    assert tuple(sorted(p.name for p in pack)) == tuple(sorted(SKILL_NAMES))
+    for skill in pack:
+        assert skill_contract.lint(skill / "SKILL.md") == [], skill.name
+    router = (PostgresEngine().skills_dir() / "using-pythia-pg" / "SKILL.md") \
+        .read_text(encoding="utf-8")
+    for name in SKILL_NAMES[1:]:
+        assert f"`{name}`" in router, f"the router never routes to {name}"
+    for named in set(re.findall(r"`(pythia-pg-[a-z-]+)`", router)):
+        assert named in SKILL_NAMES, f"the router names a skill that is not shipped: {named}"
+    text = "\n".join((s / "SKILL.md").read_text(encoding="utf-8") for s in pack)
+    assert "pythia-pg approve <token>" in text and "--confirm <token>" in text
+
+
+def test_the_skills_ship_in_the_wheel():
+    toml = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    for glob in ('"skills/*/SKILL.md"', '"skills/*/reference/*.md"'):
+        assert glob in toml, f"package-data misses {glob}"
+
+
 def main():
     failed = 0
     for name, fn in sorted(globals().items()):
