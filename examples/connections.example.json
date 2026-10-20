@@ -1,0 +1,13 @@
+{
+  "default": "dev",
+
+  "dev": {
+    "host": "",
+    "port": 5432,
+    "dbname": "",
+    "user": "",
+    "password": "",
+    "schema": "APP_OWNER",
+    "sslmode": ""
+  }
+}

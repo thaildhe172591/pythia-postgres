@@ -1,0 +1,14 @@
+# Credentials & local state — never commit
+.pythia/
+*.local.json
+.env
+
+# Python
+__pycache__/
+*.pyc
+build/
+dist/
+*.egg-info/
+
+# CI checkout of pythia-core
+.core/

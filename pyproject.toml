@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pythia-postgres"
+version = "0.1.0.dev0"
+description = "pythia for PostgreSQL: PL/pgSQL development for AI agents over pythia-core - catalog queries, impact analysis and a snapshot-verified write path."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.9"
+# pythia-core and the driver, nothing else (tests/test_postgres.py).
+# psycopg[binary] carries its own libpq, so no client install is needed.
+dependencies = ["pythia-core>=0.1.0.dev0", "psycopg[binary]>=3.1"]
+keywords = ["postgresql", "plpgsql", "database", "agent-skills", "sql"]
+
+[project.urls]
+Repository = "https://github.com/thaildhe172591/pythia-postgres"
+
+[project.scripts]
+pythia-pg = "pythia_postgres.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+pythia_postgres = ["queries/*.sql"]

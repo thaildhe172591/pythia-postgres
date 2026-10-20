@@ -1,0 +1,84 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# pythia-core is private while pre-alpha. GITHUB_TOKEN reaches only this
+# repository, so the core checkout needs a fine-grained token with read
+# access to pythia-core, stored as the PYTHIA_CORE_TOKEN secret. Once
+# pythia-core is public, the fallback to github.token is enough.
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ["3.9", "3.13"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          repository: thaildhe172591/pythia-core
+          path: .core
+          token: ${{ secrets.PYTHIA_CORE_TOKEN || github.token }}
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+      # nothing to install: the suite stands in for psycopg and finds core's src/
+      - run: python -m compileall -q src tests
+      - run: python tests/test_postgres.py
+        env:
+          PYTHIA_CORE_SRC: ${{ github.workspace }}/.core/src
+
+  live:
+    # a disposable server per run; never a shared database
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: ci-only
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 12
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          repository: thaildhe172591/pythia-core
+          path: .core
+          token: ${{ secrets.PYTHIA_CORE_TOKEN || github.token }}
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - run: pip install ./.core .
+      - run: python tests/live_check.py
+        env:
+          PYTHIA_PG_LIVE_HOST: 127.0.0.1
+          PYTHIA_PG_LIVE_PORT: "5432"
+          PYTHIA_PG_LIVE_DB: postgres
+          PYTHIA_PG_LIVE_USER: postgres
+          PYTHIA_PG_LIVE_PASSWORD: ci-only
+
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          repository: thaildhe172591/pythia-core
+          path: .core
+          token: ${{ secrets.PYTHIA_CORE_TOKEN || github.token }}
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: pip wheel . --no-deps -w dist
+      - run: pip install ./.core dist/*.whl
+      # the console script and the queries must work outside the repo layout
+      - run: cd /tmp && pythia-pg version
+      - run: cd /tmp && python -c "from pythia_postgres.engine import QUERY_BINDS, QUERY_DIR; assert all((QUERY_DIR / q).is_file() for q in QUERY_BINDS)"
