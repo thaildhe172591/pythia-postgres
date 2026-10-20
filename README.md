@@ -6,7 +6,7 @@ what [pythia](https://github.com/thaildhe172591/pythia) does on Oracle: the
 agent learns from the live catalog, asks a person before any write, and
 writes only through a gate that snapshots, verifies and reports honestly.
 
-**Pre-alpha (Phase 3d).** It reads everything pythia's Learn movement
+**Pre-alpha (Phase 3e).** It reads everything pythia's Learn movement
 needs, and it writes through one gate. Every write is rehearsed inside a
 transaction, shown, approved by the developer — in the agent's chat or at
 their console — and committed only as approved. `pythia-pg install` wires a project for an
@@ -19,7 +19,7 @@ What each gate stops, and what it does not, is in its
 
 | Works today | Next |
 |---|---|
-| `check`, `ls`, `src`, `cols`, `ddl`, `grep`, `deps`, `impact`, `errors`; `apply`, `deploy`, `approve` (console, chat, MCP), `autopilot`, `policy`, `journal`, `history`; `install`, `doctor`, `skill lint`, the hooks, `mcp` | lint rules (3e) |
+| `check`, `ls`, `src`, `cols`, `ddl`, `grep`, `deps`, `impact`, `errors`; `lint`; `apply`, `deploy`, `approve` (console, chat, MCP), `autopilot`, `policy`, `journal`, `history`; `install`, `doctor`, `skill lint`, the hooks, `mcp` | SQL Server (Phase 4) |
 
 ## Install (from git while pre-alpha)
 
@@ -198,6 +198,38 @@ transaction, and commits only if every statement still matches. A statement
 that fails, or rows, objects or verifications that moved, roll back the
 whole release: nothing of it is left half-landed. Refused before anything
 runs: `SET` inside a release, and anything `apply` refuses.
+
+### Lint: before any apply
+
+```bash
+pythia-pg lint 01_schema.sql 02_code.sql   # a change's files in one run
+pythia-pg lint --rules                     # every rule and its effective severity
+```
+
+The rules read what PostgreSQL accepts and a reviewer would not:
+
+| Rule | Default | Why |
+|---|---|---|
+| `pg-definer-search-path` | error | a `SECURITY DEFINER` function (created or altered) without `SET search_path` can be hijacked by anyone who can create objects on the caller's path |
+| `pg-timestamp-without-tz` | warn | `timestamp` stores a wall-clock time, not a moment — `timestamptz` |
+| `pg-char-n` | warn | `char(n)` pads with spaces |
+| `pg-money` | warn | `money` depends on `lc_monetary` — `numeric` |
+| `pg-serial` | info | prefer `GENERATED ALWAYS AS IDENTITY` |
+| `pg-select-star` | warn | `SELECT *` in a view or function freezes or breaks on a new column |
+| `pg-not-in-subquery` | warn | `NOT IN (SELECT ...)` is never true when the subquery returns a NULL |
+| `pg-table-comment` | warn | a new table gets its `COMMENT ON TABLE` in the same change |
+
+What PostgreSQL rejects itself (a RAISE with the wrong number of arguments)
+is left to the rehearsal. The team sets severities and naming patterns in
+`.pythia/postgres/lint.json`:
+
+```json
+{"severity": {"pg-select-star": "error", "naming": "error"},
+ "naming": {"FUNCTION": "^f_[a-z0-9_]+$", "VIEW": "^v_[a-z0-9_]+$"}}
+```
+
+Every preview shows the findings, a statement's errors are on its card, and
+autopilot never lands a lint error.
 
 ### Autopilot: one lease instead of every approval
 

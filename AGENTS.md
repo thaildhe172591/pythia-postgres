@@ -5,25 +5,28 @@ it reads everything pythia's Learn movement needs, and writes through one
 gate. `pythia-pg install` wires a project: the guard, the session brief and
 the `pythia-pg-*` skills (`using-pythia-pg` routes).
 
-## Using pythia-pg as an agent (Phase 3d)
+## Using pythia-pg as an agent (Phase 3e)
 
 1. **Ask the database, never the dump.** `ls`, `src`, `cols`, `ddl`, `grep`
    against the live schema; `check` says where unqualified names really
    land.
-2. **Impact before change.** Run `pythia-pg impact <NAME>` before proposing
+2. **Lint before apply.** `pythia-pg lint <files>` — a change's files in one
+   run. Errors are fixed, not argued; the team's `.pythia/postgres/
+   conventions.md`, when it exists, is read before writing any object.
+3. **Impact before change.** Run `pythia-pg impact <NAME>` before proposing
    any modification. When it prints `! show this list to the developer`
    (10 or more dependents, or one in another schema), show the developer
    the list before writing code. Rows marked `[text]` are leads found by
    name in function source, not proofs. Relay the `blind spot` lines, and
    never call an impact list complete.
-3. **Writes go through `pythia-pg apply` (one statement per file) or
+4. **Writes go through `pythia-pg apply` (one statement per file) or
    `pythia-pg deploy` (a release, one transaction) only.**
    Never write through `psql`, a driver script or another tool: those have
    no snapshot, no rehearsal and no journal. Where `pythia-pg install` wired
    the hooks, the guard denies them; where it did not, this rule still
    binds. No `STATE` line at session start means the hooks are not
    running: say so, and ask the developer to run `pythia-pg doctor`.
-4. **The developer sees every preview.** Relay `apply`'s preview verbatim:
+5. **The developer sees every preview.** Relay `apply`'s preview verbatim:
    the diff, the rehearsal (what broke, or NOT VERIFIED), the rows, the
    overload and destructive warnings. Then ask through the first door that
    works, moving to the next unasked when one fails: on Claude Code an
@@ -33,26 +36,26 @@ the `pythia-pg-*` skills (`using-pythia-pg` routes).
    developer's terminal, `pythia-pg approve <token>`. Pass
    `--confirm <token>` only after the approval arrives. `--yes` and
    loosening `policy` are the developer's actions, at a console.
-5. **Autopilot is the developer's delegation, not yours.** When they want
+6. **Autopilot is the developer's delegation, not yours.** When they want
    you to work without per-write approvals, request the narrowest lease
    that fits (`pythia-pg autopilot request`) and ask once through a door.
    Inside it, covered writes land without asking; outside it, the normal
    gate applies. A paused lease means stop and show the developer. Report
    every write with `pythia-pg autopilot report`.
-6. **Scope is what was asked.** Dependents that break are reported with a
+7. **Scope is what was asked.** Dependents that break are reported with a
    proposal, never fixed on your own initiative.
-7. **Exit codes are the verdict:** `0` clean · `1` refused (relay the
+8. **Exit codes are the verdict:** `0` clean · `1` refused (relay the
    reason; do not route around it) · `3` written but broken — never report
    success; show the errors and the printed restore command. Never read
    `$?` through a pipe.
-8. **Restores are writes.** `journal restore` previews and needs the same
+9. **Restores are writes.** `journal restore` previews and needs the same
    approval as any apply.
-9. **"Not verified" is said plainly.** `errors` or a rehearsal printing
+10. **"Not verified" is said plainly.** `errors` or a rehearsal printing
    `NOT VERIFIED` means nothing was checked there. Never report it as clean.
-10. **Truncation is always announced.** If output has no truncation marker,
+11. **Truncation is always announced.** If output has no truncation marker,
    you saw everything. If it has one, say so or fetch the rest with
    `--offset`.
-11. **Never open `.pythia/postgres/connections.json`, or anything under
+12. **Never open `.pythia/postgres/connections.json`, or anything under
     `.pythia/postgres/grants/`.** The first holds passwords;
     `pythia-pg connections` lists what you need. A grant written by anyone
     but `approve` is a forged approval.

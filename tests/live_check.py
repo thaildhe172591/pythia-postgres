@@ -344,6 +344,11 @@ def _writes(entry, p, checked):
     assert doc["created"] is True and "new overload" in doc["rehearsal"]["notes"][0]
     ok("a new overload is named, and the old one said to stay callable")
 
+    doc = p.preview("definer.sql", "create or replace function f_definer() "
+                    "returns int language sql security definer as 'select 1'")
+    assert [f["rule"] for f in doc["lint"]] == ["pg-definer-search-path"], doc["lint"]
+    ok("lint: a SECURITY DEFINER function without search_path is an error in the preview")
+
     code, _, why = p.run("apply", p.file("bad.sql", "create or replace function "
                                          "f_bad() returns int language plpgsql "
                                          "as $$ begin retrun 1; end $$"))

@@ -3,7 +3,7 @@
 It answers every tier of pythia_core.engine: connect (here), read (read.py),
 write (write.py) — the write tier rehearsing each statement inside a
 transaction, since PostgreSQL's DDL runs in one — release (a script split
-where PostgreSQL would split it) and harness (guard.py).
+where PostgreSQL would split it), lint (rules.py) and harness (guard.py).
 """
 import copy
 import sys
@@ -188,6 +188,12 @@ class PostgresEngine:
 
     def split_script(self, text):
         return write.split_script(text)
+
+    # --- the lint tier (rules.py) ---------------------------------------------------
+
+    def lint_rules(self):
+        from . import rules
+        return list(rules.RULES)
 
     # --- the harness tier (guard.py) ---------------------------------------------
 

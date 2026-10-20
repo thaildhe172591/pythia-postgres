@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.8.0.dev0 — unreleased
+
+Phase 3e of the plan in pythia-core's DESIGN.md: lint, on pythia-core
+0.8.0.dev0. Phase 3 is complete.
+
+- **`pythia-pg lint <files>`** and **`--rules`**, with eight PostgreSQL rules
+  (`rules.py`): a SECURITY DEFINER function without `SET search_path`
+  (error); `timestamp` without time zone, `char(n)`, `money`, `SELECT *` in
+  stored code, `NOT IN (SELECT ...)`, a new table without a comment in the
+  change (warnings); `serial` (a note). Each reads the statement as the
+  lexer does, so a keyword in a literal never fires one, and a function
+  body is read as code. A RAISE with the wrong number of arguments is left
+  to the rehearsal: PostgreSQL rejects it itself.
+- Findings in every preview, errors on the card; autopilot never lands one.
+- AGENTS.md gains "lint before apply"; `pythia-pg-apply` lints first.
+- The live check shows the SECURITY DEFINER error in a real preview.
+
 ## 0.7.0.dev0 — unreleased
 
 Phase 3d of the plan in pythia-core's DESIGN.md: autopilot leases, on

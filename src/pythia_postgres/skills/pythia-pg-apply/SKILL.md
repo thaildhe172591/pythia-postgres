@@ -25,8 +25,10 @@ NO WRITE WITHOUT A PREVIEW THE DEVELOPER SAW AND APPROVED
 
 1. **Impact first** (`pythia-pg-impact`) — the number was known before the
    code was written.
-2. **One statement per file.** `CREATE OR REPLACE FUNCTION ...;` in its own
-   `.sql` file. Several statements, DO blocks, CALL, psql meta-commands and
+2. **One statement per file**, linted first: `pythia-pg lint <files>` — a
+   change's files in one run, since a COMMENT ON in one counts for the
+   table in another. Errors are fixed, not argued. `CREATE OR REPLACE
+   FUNCTION ...;` goes in its own `.sql` file. Several statements, DO blocks, CALL, psql meta-commands and
    anything that cannot run in a transaction are refused — see
    `reference/refusals.md` for each refusal and its way forward.
 3. **Preview:** `pythia-pg apply change.sql`. Nothing is kept. It prints:

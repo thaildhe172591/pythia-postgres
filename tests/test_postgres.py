@@ -818,9 +818,77 @@ def guard(root, command, tool="Bash"):
     return out and out["hookSpecificOutput"]["permissionDecision"]
 
 
-def test_the_engine_answers_the_harness_and_release_tiers():
+def test_the_engine_answers_the_harness_release_and_lint_tiers():
     assert engine_problems(PostgresEngine(), tiers=(
-        "connect", "read", "write", "harness", "release")) == []
+        "connect", "read", "write", "harness", "release", "lint")) == []
+
+
+def lint_ids(*statements):
+    """{(rule, statement index, line)} over a change of statements."""
+    from pythia_core import lint
+    stmts = [{"file": "f.sql", "line": 1, "text": t, "group": write.classify(t)[0],
+              "n": i + 1} for i, t in enumerate(statements)]
+    found = lint.run(PostgresEngine(), {"severity": {}, "naming": {}}, stmts)
+    return {(f["rule"], f["n"], f["line"]) for f in found}, found
+
+
+def test_lint_catches_a_security_definer_function_without_a_search_path():
+    bad = ("create or replace function f_pay(p bigint) returns void\n"
+           "language plpgsql security definer as $$\n"
+           "begin\n  -- set search_path here would not help\n"
+           "  update t_order set status = 'PAID' where id = p;\nend $$")
+    ids, found = lint_ids(bad)
+    assert ("pg-definer-search-path", 1, 2) in ids          # where SECURITY DEFINER is
+    assert next(f for f in found if f["rule"] == "pg-definer-search-path")["severity"] == "error"
+    good = bad.replace("security definer", "security definer set search_path = app_owner, pg_temp")
+    assert not any(r == "pg-definer-search-path" for r, _, _ in lint_ids(good)[0])
+    invoker = bad.replace("security definer", "")
+    assert not any(r == "pg-definer-search-path" for r, _, _ in lint_ids(invoker)[0])
+    assert ("pg-definer-search-path", 1, 1) in lint_ids(
+        "alter function f_pay(bigint) security definer")[0]
+    assert not lint_ids("alter function f_pay(bigint) security definer "
+                        "set search_path = app_owner, pg_temp")[0]
+
+
+def test_lint_reads_column_types_the_postgres_wiki_warns_about():
+    ids, _ = lint_ids("create table t_note (\n"
+                      "  id serial primary key,\n"
+                      "  code char(3),\n"
+                      "  price money,\n"
+                      "  noted timestamp,\n"
+                      "  seen timestamp(3) without time zone,\n"
+                      "  fine timestamptz,\n"
+                      "  also timestamp with time zone,\n"
+                      "  name varchar(40),\n"
+                      "  note text default 'char(3) money timestamp serial'\n)")
+    got = {(r, ln) for r, _, ln in ids}
+    assert {("pg-serial", 2), ("pg-char-n", 3), ("pg-money", 4),
+            ("pg-timestamp-without-tz", 5), ("pg-timestamp-without-tz", 6)} <= got, got
+    assert not any(ln in (7, 8, 9, 10) for _, ln in got if _ != "pg-table-comment"), got
+    code, _ = lint_ids("create or replace function f_when() returns timestamp "
+                       "language sql as $$ select now()::timestamp $$")
+    assert not code, code           # column types are a table's business, not a cast's
+
+
+def test_lint_flags_select_star_and_not_in_a_subquery_in_code():
+    ids, _ = lint_ids("create view v_order as select * from t_order",
+                      "create or replace function f_open() returns setof t_order\n"
+                      "language sql as $$\n  select * from t_order\n"
+                      "  where id not in (select order_id from t_order_line)\n$$",
+                      "delete from t_order where id not in (select order_id from t_paid)")
+    assert {("pg-select-star", 1, 1), ("pg-select-star", 2, 3),
+            ("pg-not-in-subquery", 2, 4), ("pg-not-in-subquery", 3, 1)} <= ids, ids
+    clean, _ = lint_ids("create view v_n as select count(*) as n, t.id from t_order t "
+                        "where t.id not in (1, 2) and t.status <> 'select * from x'")
+    assert not clean, clean
+
+
+def test_lint_asks_for_a_comment_on_every_new_table_anywhere_in_the_change():
+    table = "create table app_owner.t_note (id bigint)"
+    assert ("pg-table-comment", 1, 1) in lint_ids(table)[0]
+    assert not lint_ids(table, "comment on table t_note is 'notes'")[0]
+    assert not lint_ids(table, 'comment on table APP_OWNER."t_note" is \'notes\'')[0]
+    assert ("pg-table-comment", 1, 1) in lint_ids(table, "comment on table t_other is 'x'")[0]
 
 
 def test_a_script_splits_where_postgres_would_and_says_where_each_starts():
