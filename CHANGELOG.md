@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.1 — unreleased
+## 0.1.1 — 2026-10-21
 
 Phase 8 of the plan in pythia-core's DESIGN.md: the minimum version, on
 pythia-core 0.1.1.
