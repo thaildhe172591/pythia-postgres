@@ -5,7 +5,7 @@ description: >-
   is tested against its own core.
 inputs:
   token:
-    description: a token that can read pythia-core (any token: it is public)
+    description: a token that can read pythia-core (any token does, as it is public)
     required: true
 runs:
   using: composite
