@@ -32,10 +32,14 @@ jobs:
 
   live:
     # a disposable server per run; never a shared database
+    strategy:
+      fail-fast: false
+      matrix:
+        pg: ["13", "14", "15", "16", "17", "18"]
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:16
+        image: postgres:${{ matrix.pg }}
         env:
           POSTGRES_PASSWORD: ci-only
         ports: ["5432:5432"]
@@ -56,7 +60,7 @@ jobs:
       - name: plpgsql_check into the service container
         run: >-
           docker exec ${{ job.services.postgres.id }} sh -c
-          'apt-get update -qq && apt-get install -y -qq postgresql-16-plpgsql-check'
+          'apt-get update -qq && apt-get install -y -qq postgresql-${{ matrix.pg }}-plpgsql-check'
       - run: python tests/live_check.py
         env:
           PYTHIA_PG_LIVE_HOST: 127.0.0.1
