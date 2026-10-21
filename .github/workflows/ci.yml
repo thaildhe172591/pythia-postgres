@@ -5,10 +5,8 @@ on:
     branches: [main, "claude/**"]
   pull_request:
 
-# pythia-core is private while pre-alpha. GITHUB_TOKEN reaches only this
-# repository, so reading pythia-core needs a fine-grained token with read
-# access to it, stored as the PYTHIA_CORE_TOKEN secret. Once pythia-core is
-# public, the fallback to github.token is enough.
+# pythia-core is public, so github.token reads it; a PYTHIA_CORE_TOKEN
+# secret, when one is set, is used instead.
 
 jobs:
   test:

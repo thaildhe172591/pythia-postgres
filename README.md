@@ -1,13 +1,15 @@
 # pythia-postgres
 
+**English** · [Tiếng Việt](https://github.com/thaildhe172591/pythia-postgres/blob/main/README.vi.md)
+
 pythia for PostgreSQL: PL/pgSQL development for AI agents, built on
 [pythia-core](https://github.com/thaildhe172591/pythia-core). It aims to do
 what [pythia](https://github.com/thaildhe172591/pythia) does on Oracle: the
 agent learns from the live catalog, asks a person before any write, and
 writes only through a gate that snapshots, verifies and reports honestly.
 
-**Pre-alpha (Phase 3e).** It reads everything pythia's Learn movement
-needs, and it writes through one gate. Every write is rehearsed inside a
+**Alpha (0.1.0).** It reads everything pythia's Learn movement needs, and
+it writes through one gate. Every write is rehearsed inside a
 transaction, shown, approved by the developer — in the agent's chat or at
 their console — and committed only as approved. `pythia-pg install` wires a project for an
 agent: a guard that denies `psql` writing around the gate, the rules in
@@ -17,19 +19,26 @@ PostgreSQL are in pythia-core's
 What each gate stops, and what it does not, is in its
 [SECURITY.md](https://github.com/thaildhe172591/pythia-core/blob/main/SECURITY.md).
 
-| Works today | Next |
-|---|---|
-| `check`, `ls`, `src`, `cols`, `ddl`, `grep`, `deps`, `impact`, `errors`; `lint`; `apply`, `deploy`, `approve` (console, chat, MCP), `autopilot`, `policy`, `journal`, `history`; `install`, `doctor`, `skill lint`, the hooks, `mcp` | SQL Server (Phase 4) |
+| Works today |
+|---|
+| reads: `check`, `ls`, `src`, `cols`, `ddl`, `grep`, `deps`, `impact`, `errors`, `connections` |
+| writes: `apply`, `deploy`, `approve` (console, chat, MCP), `journal`, `history`, `policy`, `autopilot`, `lint` |
+| the harness: `install`, `doctor`, `hook`, `mcp`, `skill lint` |
 
-## Install (from git while pre-alpha)
+## Install
+
+```bash
+pip install pythia-postgres
+```
+
+That brings pythia-core, and psycopg 3 with its own libpq
+(`psycopg[binary]`), so no PostgreSQL client needs installing. The
+development version is the main branch of both:
 
 ```bash
 pip install "git+https://github.com/thaildhe172591/pythia-core" \
             "git+https://github.com/thaildhe172591/pythia-postgres"
 ```
-
-That brings psycopg 3 with its own libpq (`psycopg[binary]`), so no
-PostgreSQL client needs installing.
 
 ## Set up a project for an agent
 
@@ -57,7 +66,7 @@ pythia-pg doctor      # is everything wired? exit 1 names what is not
   and the developer's own text, are left alone);
 - the skills, in `.claude/skills` and `.agents/skills`: `using-pythia-pg`
   (the router), `pythia-pg-explore`, `pythia-pg-impact`, `pythia-pg-apply`,
-  `pythia-pg-verify`.
+  `pythia-pg-deploy`, `pythia-pg-autopilot`, `pythia-pg-verify`.
 
 Restart the agent's session after installing, so the hooks load. Each
 session then starts with the rules and a `STATE` line (connections, the
@@ -76,11 +85,16 @@ The guard reads a command for what it names, not what it means: it can
 deny a harmless command and miss a write spelled in a way it does not
 list. The gate behind it holds either way (pythia-core's SECURITY.md).
 
+pythia-mssql and pythia-mongo install beside it in one project, and pythia
+for Oracle too: each keeps the others' hooks and instruction blocks, and
+each guard and approval hook acts for its own tool only (pythia-core's CI
+checks it with all four installed).
+
 ## Connections
 
 `.pythia/postgres/connections.json` in the project root, owner-readable only
 (`chmod 600`), and out of git — `pythia-pg install` does all three. Template:
-[examples/connections.example.json](examples/connections.example.json).
+[examples/connections.example.json](https://github.com/thaildhe172591/pythia-postgres/blob/main/examples/connections.example.json).
 
 ```json
 {
@@ -306,13 +320,12 @@ python tests/live_check.py      # a disposable server only (see its docstring)
 one (`../pythia-core`), or at `PYTHIA_CORE_SRC`. CI runs it on Ubuntu,
 Windows and macOS, Python 3.9 and 3.13. CI also runs the live check against
 a `postgres:16` service container. The live check loads
-[tests/fixtures/app_owner.sql](tests/fixtures/app_owner.sql) and checks
+[tests/fixtures/app_owner.sql](https://github.com/thaildhe172591/pythia-postgres/blob/main/tests/fixtures/app_owner.sql) and checks
 every command against it: the reads, then the write gate end to end
 (preview, approve, confirm, restore, rows and verifications that moved).
-All of it runs with and without `plpgsql_check`.
-While pythia-core is private, CI needs a `PYTHIA_CORE_TOKEN` secret that can
-read it. CI tests against the pythia-core branch of the same name when one
-exists, so a change spanning both repositories is tested whole.
+All of it runs with and without `plpgsql_check`. CI tests against the
+pythia-core branch of the same name when one exists, so a change spanning
+both repositories is tested whole.
 
 ## License
 

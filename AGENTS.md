@@ -1,6 +1,6 @@
 # Working in this repository / with this tool
 
-pythia-postgres is pythia for PostgreSQL, on pythia-core. It is pre-alpha:
+pythia-postgres is pythia for PostgreSQL, on pythia-core. It is alpha (0.1.0):
 it reads everything pythia's Learn movement needs, and writes through one
 gate. `pythia-pg install` wires a project: the guard, the session brief and
 the `pythia-pg-*` skills (`using-pythia-pg` routes).
@@ -81,8 +81,26 @@ the `pythia-pg-*` skills (`using-pythia-pg` routes).
   in `reference/`), and a row in `using-pythia-pg`'s routing table. A test
   holds every one to it.
 - **Docs never contradict code:** a behaviour change updates the docstring,
-  README.md, CHANGELOG.md and the affected skill in the same change.
-- **Versions** agree in pyproject.toml and `pythia_postgres.__version__`.
+  README.md and README.vi.md, CHANGELOG.md and the affected skill in the
+  same change. A test holds README.vi.md to README.md's headings and
+  commands; the prose is translated by hand.
+- **Versions** agree in pyproject.toml and `pythia_postgres.__version__`, the
+  version has its CHANGELOG.md entry, and pythia-core is asked for within
+  one release series (`pythia-core>=0.1.0,<0.2`). A test holds all three.
+
+## Releasing
+
+1. Once per project: a PyPI trusted publisher (pypi.org → your account →
+   Publishing → add a pending publisher: project `pythia-postgres`, owner
+   `thaildhe172591`, repository `pythia-postgres`, workflow `release.yml`,
+   environment `pypi`). No token is stored anywhere.
+2. pythia-core's release of the series is on PyPI first: this package asks
+   for it.
+3. The version in pyproject.toml and `__version__`, its CHANGELOG.md entry
+   dated, and CI green on main.
+4. `git tag vX.Y.Z && git push origin vX.Y.Z`: the `release` workflow runs
+   the suite against pythia-core's main, checks the tag against the version
+   and the changelog, and publishes.
 
 ## Never
 
@@ -91,4 +109,4 @@ the `pythia-pg-*` skills (`using-pythia-pg` routes).
 - Point the live check at a shared database.
 - Put real-world identifiers anywhere (hosts, schemas, tenants,
   credentials). Examples use APP_OWNER, PKG_ORDER, T_ORDER. Everything
-  shipped is English.
+  shipped is English, but for README.vi.md, the README's translation.

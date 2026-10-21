@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pythia-postgres"
-version = "0.8.0.dev0"
+version = "0.1.0"
 description = "pythia for PostgreSQL: PL/pgSQL development for AI agents over pythia-core - catalog queries, impact analysis and a snapshot-verified write path."
 readme = "README.md"
 license = "MIT"
@@ -12,11 +12,27 @@ license-files = ["LICENSE"]
 requires-python = ">=3.9"
 # pythia-core and the driver, nothing else (tests/test_postgres.py).
 # psycopg[binary] carries its own libpq, so no client install is needed.
-dependencies = ["pythia-core>=0.8.0.dev0", "psycopg[binary]>=3.1"]
+dependencies = ["pythia-core>=0.1.0,<0.2", "psycopg[binary]>=3.1"]
 keywords = ["postgresql", "plpgsql", "database", "agent-skills", "sql"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Database",
+    "Topic :: Software Development",
+]
 
 [project.urls]
 Repository = "https://github.com/thaildhe172591/pythia-postgres"
+Changelog = "https://github.com/thaildhe172591/pythia-postgres/blob/main/CHANGELOG.md"
+Issues = "https://github.com/thaildhe172591/pythia-postgres/issues"
 
 [project.scripts]
 pythia-pg = "pythia_postgres.cli:main"
