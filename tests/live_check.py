@@ -84,7 +84,8 @@ def check_connect(entry):
     doc = pg(entry, "check")
     server = next(r["VALUE"] for r in doc["rows"] if r["ITEM"] == "server")
     assert server.startswith("PostgreSQL "), server
-    ok(f"check: {server}")
+    assert doc["below_floor"] is None, doc["below_floor"]    # CI runs 14 and up
+    ok(f"check: {server}, at or above the floor")
     e = PostgresEngine()
     conn = e.session(e.connect(entry), True)
     try:

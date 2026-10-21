@@ -11,6 +11,8 @@ import sys
 from . import __version__, guard, read, write
 from .catalog import QUERY_BINDS, QUERY_DIR, q  # noqa: F401 — QUERY_* re-exported
 
+FLOOR = 140000          # PostgreSQL 14, as server_version_num: the oldest CI tests
+
 CONFIG_REL = ".pythia/postgres/connections.json"
 REQUIRED = ("host", "dbname", "user")
 
@@ -119,8 +121,21 @@ class PostgresEngine:
     # --- what check asks --------------------------------------------------------
 
     def server_version(self, conn):
-        version, database = q(conn, "server-version.sql")[1][0]
+        version, database, _ = q(conn, "server-version.sql")[1][0]
         return f"PostgreSQL {version} — database {database}"
+
+    def floor_warning(self, conn):
+        """Below PostgreSQL 14, the oldest version CI tests: said by `check`,
+        never refused (pythia-core DESIGN.md §8, question 2)."""
+        num = int(q(conn, "server-version.sql")[1][0][2])
+        if num >= FLOOR:
+            return None
+        major = num // 10000 if num >= 100000 else f"{num // 10000}.{num // 100 % 100}"
+        return (f"PostgreSQL {major} is below pythia-pg's floor, 14: it is not "
+                "tested there (CI runs 14 to 18), and the PostgreSQL project no "
+                "longer supports it. Most commands may still work; a function "
+                "with a BEGIN ATOMIC body, and the dependencies PostgreSQL "
+                "records for it, start at 14.")
 
     def current_schema(self, conn):
         rows = q(conn, "current-schema.sql")[1]

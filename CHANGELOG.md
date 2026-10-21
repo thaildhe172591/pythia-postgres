@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.1 — unreleased
+
+Phase 8 of the plan in pythia-core's DESIGN.md: the minimum version, on
+pythia-core 0.1.1.
+
+- **PostgreSQL 14 is the floor.** CI runs the whole live check on
+  PostgreSQL 14, 15, 16, 17 and 18. 13 is past its end of life, and lacks
+  `BEGIN ATOMIC`. Below the floor `check` says so — from
+  `server_version_num` — and nothing is refused.
+- **`plpgsql_check` stays optional** and detected; without it, `errors`
+  and every preview say `NOT VERIFIED`.
+- Asks for `pythia-core>=0.1.1,<0.2`.
+
 ## 0.1.0 — 2026-10-21
 
 The first release, and the first on PyPI: alpha, on pythia-core 0.1.0.

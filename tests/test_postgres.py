@@ -86,8 +86,8 @@ class FakeConn:
 
 
 SCRIPT = {
-    "current_setting('server_version')": (("version", "database"),
-                                          [("16.4", "app")]),
+    "current_setting('server_version')": (("version", "database", "version_num"),
+                                          [("16.4", "app", 160004)]),
     "current_schema()": (("current_schema",), [("app_owner",)]),
 }
 
@@ -286,6 +286,7 @@ def test_check_end_to_end():
     assert code == 0 and doc["ok"] and doc["connection"] == "dev"
     assert doc["schema"] == "app_owner" and doc["schema_drift"] is False
     assert {"ITEM": "server", "VALUE": "PostgreSQL 16.4 — database app"} in doc["rows"]
+    assert doc["below_floor"] is None
     assert "-- connection=dev schema=app_owner" in err
     conn = rec["conns"][0]
     assert conn.read_only is True and conn.closed is True
@@ -378,6 +379,21 @@ def resolving(*objs):
     def answer(b):
         return RESOLVE_COLS, [o for o in objs if o[4] == b["n"]]
     return answer
+
+
+def test_check_warns_below_postgresql_14_and_refuses_nothing():
+    e = PostgresEngine()
+
+    def server(version, num):
+        return CatalogConn({"server-version.sql": (
+            ("version", "database", "version_num"), [(version, "app", num)])})
+    old = e.floor_warning(server("13.23", 130023))
+    assert old.startswith("PostgreSQL 13 is below pythia-pg's floor, 14"), old
+    assert "CI runs 14 to 18" in old
+    assert e.floor_warning(server("9.6.24", 90624)).startswith("PostgreSQL 9.6 is below")
+    assert e.floor_warning(server("14.0", 140000)) is None
+    assert e.floor_warning(server("18.1", 180001)) is None
+    assert e.server_version(server("16.4", 160004)) == "PostgreSQL 16.4 — database app"
 
 
 def test_fold_is_postgres_identifier_folding():
@@ -1027,7 +1043,8 @@ def test_the_release_workflow_checks_the_tag_against_the_version():
 
 def test_it_asks_for_the_core_of_its_release_series():
     # 0.x: a minor version of pythia-core may change the engine contract
-    assert '"pythia-core>=0.1.0,<0.2"' in pyproject()
+    assert re.search(r'"pythia-core>=0\.1\.\d+,<0\.2"', pyproject()), \
+        "pythia-core is asked for outside its 0.1 series"
 
 
 def readme_shape(text):

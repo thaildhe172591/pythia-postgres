@@ -8,7 +8,7 @@ what [pythia](https://github.com/thaildhe172591/pythia) does on Oracle: the
 agent learns from the live catalog, asks a person before any write, and
 writes only through a gate that snapshots, verifies and reports honestly.
 
-**Alpha (0.1.0).** It reads everything pythia's Learn movement needs, and
+**Alpha (0.1.1).** It reads everything pythia's Learn movement needs, and
 it writes through one gate. Every write is rehearsed inside a
 transaction, shown, approved by the developer — in the agent's chat or at
 their console — and committed only as approved. `pythia-pg install` wires a project for an
@@ -24,6 +24,11 @@ What each gate stops, and what it does not, is in its
 | reads: `check`, `ls`, `src`, `cols`, `ddl`, `grep`, `deps`, `impact`, `errors`, `connections` |
 | writes: `apply`, `deploy`, `approve` (console, chat, MCP), `journal`, `history`, `policy`, `autopilot`, `lint` |
 | the harness: `install`, `doctor`, `hook`, `mcp`, `skill lint` |
+
+PostgreSQL 14 to 18 are tested, each through the whole live check; 14 is
+the floor, and below it `check` says so (nothing is refused).
+`plpgsql_check` is optional: with it, `errors` and every preview check
+PL/pgSQL; without it, they say `NOT VERIFIED`.
 
 ## Install
 

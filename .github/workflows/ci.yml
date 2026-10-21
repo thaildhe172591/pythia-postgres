@@ -35,7 +35,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        pg: ["13", "14", "15", "16", "17", "18"]
+        # the floor (pythia-core DESIGN.md §8) up to the newest release
+        pg: ["14", "15", "16", "17", "18"]
     runs-on: ubuntu-latest
     services:
       postgres:

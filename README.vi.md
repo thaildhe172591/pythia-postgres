@@ -8,7 +8,7 @@ pythia cho PostgreSQL: phát triển PL/pgSQL cho AI agent, xây trên
 Oracle: agent học từ catalog đang chạy, hỏi một người trước mọi lần ghi, và
 chỉ ghi qua một cổng có snapshot, có kiểm chứng và báo cáo trung thực.
 
-**Alpha (0.1.0).** Nó đọc được mọi thứ mà nhịp Học của pythia cần, và ghi
+**Alpha (0.1.1).** Nó đọc được mọi thứ mà nhịp Học của pythia cần, và ghi
 qua một cổng duy nhất. Mọi lần ghi đều được rehearse trong một transaction,
 đưa ra cho xem, được dev duyệt — trong chat của agent hoặc ở console của họ
 — và chỉ commit đúng như đã duyệt. `pythia-pg install` chuẩn bị một project
@@ -25,6 +25,11 @@ của nó.
 | đọc: `check`, `ls`, `src`, `cols`, `ddl`, `grep`, `deps`, `impact`, `errors`, `connections` |
 | ghi: `apply`, `deploy`, `approve` (console, chat, MCP), `journal`, `history`, `policy`, `autopilot`, `lint` |
 | harness: `install`, `doctor`, `hook`, `mcp`, `skill lint` |
+
+Đã test trên PostgreSQL 14 đến 18, mỗi bản qua toàn bộ live check; 14 là
+phiên bản tối thiểu, và thấp hơn thì `check` nói rõ (không gì bị từ chối).
+`plpgsql_check` là tuỳ chọn: có nó, `errors` và mọi preview kiểm
+PL/pgSQL; không có, chúng ghi `NOT VERIFIED`.
 
 ## Cài đặt
 

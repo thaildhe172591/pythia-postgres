@@ -1,6 +1,6 @@
 # Working in this repository / with this tool
 
-pythia-postgres is pythia for PostgreSQL, on pythia-core. It is alpha (0.1.0):
+pythia-postgres is pythia for PostgreSQL, on pythia-core. It is alpha (0.1.1):
 it reads everything pythia's Learn movement needs, and writes through one
 gate. `pythia-pg install` wires a project: the guard, the session brief and
 the `pythia-pg-*` skills (`using-pythia-pg` routes).
@@ -70,7 +70,8 @@ the `pythia-pg-*` skills (`using-pythia-pg` routes).
 - **Queries:** every SQL statement lives in `src/pythia_postgres/queries/`,
   one per file, pyformat binds only (`%(s)s`), a literal `%` written `%%`,
   the `-- Purpose / -- Binds / -- Returns` header, and an entry in
-  `QUERY_BINDS`.
+  `QUERY_BINDS`. PostgreSQL 14 is the floor: CI runs the live check on 14
+  to 18, and a query that needs a newer version has no place here.
 - **Dependencies:** pythia-core and psycopg, nothing else (a test enforces
   it).
 - **Engine-neutral logic goes to pythia-core.** If an answer would be the
